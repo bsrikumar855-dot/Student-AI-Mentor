@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from backend.models import StudentState, RiskResult, RiskComponents
 
 # SPEC Section 2: fixed weights and target for risk scoring.
+# Banding: High if score>=45, Medium if score>=25, else Low.
 WEIGHTS = {
     "score_gap": 0.35,
     "syllabus_behind": 0.25,
@@ -60,12 +61,12 @@ def calculate_risk(student: StudentState) -> RiskResult:
     score01 = sum(weighted_terms.values())
     score = round(score01 * 100)
 
-    if score < 33:
-        level = "Low"
-    elif score < 66:
+    if score >= 45:
+        level = "High"
+    elif score >= 25:
         level = "Medium"
     else:
-        level = "High"
+        level = "Low"
 
     # Find dominant term
     dominant = max(weighted_terms, key=lambda k: weighted_terms[k])

@@ -408,21 +408,18 @@ def test_cohort_realism_and_transition():
         else:
             low_count += 1
             
-    # Verify spread requirements (per SPEC 33/66 banding on the deterministic-core formula)
-    assert high_count >= 1
-    assert med_count >= 1
+    # Verify spread requirements (per SPEC banding: High>=45, Medium>=25, else Low)
+    assert high_count >= 3
+    assert med_count >= 4
     assert low_count >= 1
     assert aisha is not None
     assert aisha.risk.level == "Medium"
     
-    # Aisha Medium -> High Transition
+    # Aisha Medium -> High Transition: natural drift only
+    # (inactive 8 days + exam in 5 days; DSA completion stays at 0.45, DSA scores unchanged)
     aisha.days_since_active = 8
     aisha.nearest_exam.days_to_exam = 5
-    aisha.nearest_exam.completion = 0.0
-    aisha.exams[0].days_to_exam = 5
-    aisha.exams[0].completion = 0.0
-    aisha.subjects[1].latest = 20.0
-    aisha.subjects[1].trend = [78.0, 65.0, 20.0]
+    aisha.nearest_exam.completion = 0.45
     
     new_risk = calculate_risk(aisha)
     assert new_risk.level == "High"
@@ -437,9 +434,21 @@ def test_chat_response_fallback():
     assert not used_llm
     assert "Polaris Mentor: I received your message: 'Hello Polaris'." in reply
 
-def test_chat_response_exception_safety():
-    # Pass an invalid/expired key to ensure it falls back gracefully and never raises
-    reply, used_llm = chat_response("Hello Polaris", [], api_key="INVALID_API_KEY_FOR_TESTING")
+def test_chat_response_exception_safety(monkeypatch):
+    # Monkeypatch the LLM client to raise so no real network call is made.
+    # Verifies that used_llm is False and we get the templated fallback.
+    import google.generativeai as genai
+
+    class _RaisingModel:
+        def __init__(self, *a, **kw):
+            pass
+        def generate_content(self, *a, **kw):
+            raise RuntimeError("simulated LLM failure")
+
+    monkeypatch.setattr(genai, "GenerativeModel", _RaisingModel)
+    monkeypatch.setattr(genai, "configure", lambda **kw: None)
+
+    reply, used_llm = chat_response("Hello Polaris", [], api_key="FAKE_KEY_TRIGGERS_LLM_PATH")
     assert not used_llm
     assert "Polaris Mentor: I received your message: 'Hello Polaris'." in reply
 

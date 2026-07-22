@@ -27,7 +27,7 @@ def phrase_intervention_message(student: StudentState, plan: Plan, api_key: Opti
     """
     Phrases an intervention message for the student using an LLM or templated text fallback.
     """
-    key = api_key or os.environ.get("POLARIS_LLM_API_KEY")
+    key = api_key or os.environ.get("GEMINI_API_KEY")
     if key:
         try:
             # Lazy import of LLM SDK
@@ -67,7 +67,7 @@ def chat_response(prompt: str, history: list, api_key: Optional[str] = None) -> 
     """
     Handles a chat prompt with an optional LLM. Returns (reply_text, used_llm).
     """
-    key = api_key or os.environ.get("POLARIS_LLM_API_KEY")
+    key = api_key or os.environ.get("GEMINI_API_KEY")
     if key:
         try:
             # Lazy import of LLM SDK
