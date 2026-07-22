@@ -1,3 +1,4 @@
+import json
 import pytest
 from backend.models import StudentState, Plan, TopicMemory
 from backend.ingest import ingest_excel
@@ -454,3 +455,179 @@ def test_chat_response_exception_safety(monkeypatch):
     assert "Drishta Mentor: I received your message: 'Hello Drishta'." in reply
 
 
+
+# ── Phase 6: Coding Progress Adapter Tests ────────────────────────────────────
+
+def test_codeforces_live_path(monkeypatch):
+    """Live-path: parses a mocked Codeforces API response correctly."""
+    import urllib.request
+    import io
+    import time
+    from backend import coding
+
+    # Clear module cache so previous test runs don't interfere
+    coding._cache.clear()
+
+    fake_now = 1_700_000_000  # fixed epoch for determinism
+    last_online = fake_now - (3 * 86400)  # 3 days ago
+
+    user_info_payload = json.dumps({
+        "status": "OK",
+        "result": [{
+            "handle": "test_user",
+            "rating": 1400,
+            "maxRating": 1500,
+            "rank": "specialist",
+            "lastOnlineTimeSeconds": last_online,
+        }]
+    }).encode()
+
+    user_status_payload = json.dumps({
+        "status": "OK",
+        "result": [
+            {"verdict": "OK", "problem": {"contestId": 1, "index": "A"}},
+            {"verdict": "OK", "problem": {"contestId": 1, "index": "B"}},
+            {"verdict": "WRONG_ANSWER", "problem": {"contestId": 2, "index": "A"}},
+            # Duplicate OK — should count only once
+            {"verdict": "OK", "problem": {"contestId": 1, "index": "A"}},
+        ]
+    }).encode()
+
+    call_count = {"n": 0}
+
+    class _FakeResponse:
+        def __init__(self, data):
+            self._data = data
+        def read(self):
+            return self._data
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            pass
+
+    def _fake_urlopen(url, timeout=4):
+        call_count["n"] += 1
+        if "user.info" in url:
+            return _FakeResponse(user_info_payload)
+        return _FakeResponse(user_status_payload)
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr(time, "time", lambda: fake_now)
+
+    result = coding.get_codeforces("test_user")
+
+    assert result["source"] == "live"
+    assert result["handle"] == "test_user"
+    assert result["rating"] == 1400
+    assert result["max_rating"] == 1500
+    assert result["rank"] == "specialist"
+    assert result["solved_count"] == 2   # A+B, deduplicated
+    assert result["last_active_days"] == 3
+
+
+def test_codeforces_failure_path_returns_seed(monkeypatch):
+    """Failure-path: network error returns seed/cached; source != 'live'; never raises."""
+    import urllib.request
+    from backend import coding
+
+    coding._cache.clear()
+
+    def _raise(*a, **kw):
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _raise)
+
+    result = coding.get_codeforces("aisha_cf")  # has a seed entry
+
+    assert result["source"] != "live"
+    assert result["handle"] == "aisha_cf"
+    assert "rating" in result
+    assert "solved_count" in result
+
+
+def test_codeforces_failure_returns_cached_before_seed(monkeypatch):
+    """After a successful live fetch, a subsequent failure returns 'cached' not 'seed'."""
+    import urllib.request
+    import time
+    from backend import coding
+
+    coding._cache.clear()
+
+    last_online = 1_700_000_000 - (2 * 86400)
+    live_payload = json.dumps({
+        "status": "OK",
+        "result": [{"handle": "cached_user", "rating": 999, "maxRating": 1000,
+                     "rank": "pupil", "lastOnlineTimeSeconds": last_online}]
+    }).encode()
+    solved_payload = json.dumps({"status": "OK", "result": []}).encode()
+
+    class _FakeResp:
+        def __init__(self, d):
+            self._d = d
+        def read(self): return self._d
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    monkeypatch.setattr(time, "time", lambda: 1_700_000_000)
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        lambda url, timeout=4: _FakeResp(live_payload if "user.info" in url else solved_payload))
+
+    first = coding.get_codeforces("cached_user")
+    assert first["source"] == "live"
+
+    # Now break the network
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **kw: (_ for _ in ()).throw(OSError("gone")))
+
+    second = coding.get_codeforces("cached_user")
+    assert second["source"] == "cached"
+    assert second["rating"] == 999
+
+
+def test_coding_nudge_fires_at_seven_days(monkeypatch):
+    """coding_nudge intervention fires when coding last_active_days >= 7."""
+    import urllib.request
+    from datetime import datetime
+    from backend.models import Subject, Exam, StudentState, RiskResult, RiskComponents
+    from backend.interventions import evaluate_interventions
+
+    student = StudentState(
+        student_id="STU_TEST",
+        name="Coding Student",
+        cgpa=7.0,
+        attendance=0.8,
+        subjects=[Subject(name="Math", latest=70.0, trend=[70.0, 70.0])],
+        exams=[],
+        nearest_exam=None,
+        days_since_active=1,
+        days_since_commit=1,
+        days_since_linkedin=1,
+        goals_met_streak=0,
+        topics=[],
+        skills=["python"],
+        coding_handles={"codeforces": "lazy_coder"},
+    )
+    risk_state = RiskResult(
+        score=10,
+        level="Low",
+        reasons=["Low risk"],
+        components=RiskComponents(score_gap=0.0, syllabus_behind=0.0,
+                                  activity_recency=0.0, trend=0.0),
+        computed_at="2026-07-22T10:00:00Z"
+    )
+
+    # Exactly 7 days inactive → should fire
+    coding_profile = {"lazy_coder": {"last_active_days": 7, "rating": 1200}}
+    interventions = evaluate_interventions(student, risk_state, coding_profile=coding_profile)
+    actions = [i.action for i in interventions]
+    assert "coding_nudge" in actions
+
+    # 6 days inactive → should NOT fire
+    coding_profile_short = {"lazy_coder": {"last_active_days": 6, "rating": 1200}}
+    interventions2 = evaluate_interventions(student, risk_state, coding_profile=coding_profile_short)
+    actions2 = [i.action for i in interventions2]
+    assert "coding_nudge" not in actions2
+
+    # No coding_profile provided → should NOT fire
+    interventions3 = evaluate_interventions(student, risk_state, coding_profile=None)
+    actions3 = [i.action for i in interventions3]
+    assert "coding_nudge" not in actions3

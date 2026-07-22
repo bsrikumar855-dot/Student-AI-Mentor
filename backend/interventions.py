@@ -10,9 +10,10 @@ from backend.retain import due_topics
 from backend.internships import match_internships
 
 def evaluate_interventions(
-    student: StudentState, 
-    risk_state: RiskResult, 
-    internships_db: Optional[List[Dict[str, Any]]] = None
+    student: StudentState,
+    risk_state: RiskResult,
+    internships_db: Optional[List[Dict[str, Any]]] = None,
+    coding_profile: Optional[Dict[str, Any]] = None,
 ) -> List[Intervention]:
     """
     Evaluates risk and student metrics against predefined rules to trigger interventions.
@@ -129,5 +130,23 @@ def evaluate_interventions(
             kind="academic",
             auto=False
         ))
+
+    # 10. coding_nudge: coding last_active_days >= 7
+    # coding_profile is a dict {handle -> {last_active_days, ...}} passed in by the caller.
+    # If absent, nudge is skipped (no live fetch inside the deterministic core).
+    if coding_profile is not None:
+        coding_handles = getattr(student, "coding_handles", {}) or {}
+        for platform, handle in coding_handles.items():
+            prof = coding_profile.get(handle)
+            if prof is not None:
+                last_active = prof.get("last_active_days", -1)
+                if isinstance(last_active, int) and last_active >= 7:
+                    interventions.append(Intervention(
+                        id=f"{sid}:coding_nudge:{platform}",
+                        action="coding_nudge",
+                        why=f"No {platform} coding activity for {last_active} days (handle: {handle}).",
+                        kind="career",
+                        auto=True
+                    ))
 
     return interventions

@@ -52,6 +52,7 @@
     }
   ],
   "skills": ["Python", "SQL", "Git"],
+  "coding_handles": {"codeforces": "alice_cf"},
   "risk": {
     "score": 45,
     "level": "Medium",

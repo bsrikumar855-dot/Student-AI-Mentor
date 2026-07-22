@@ -1,0 +1,56 @@
+{
+  "aisha_cf": {
+    "handle": "aisha_cf",
+    "rating": 1350,
+    "max_rating": 1420,
+    "rank": "pupil",
+    "solved_count": 87,
+    "last_active_days": 5,
+    "source": "seed"
+  },
+  "alice_cf": {
+    "handle": "alice_cf",
+    "rating": 1280,
+    "max_rating": 1350,
+    "rank": "pupil",
+    "solved_count": 62,
+    "last_active_days": 3,
+    "source": "seed"
+  },
+  "rohan_cf": {
+    "handle": "rohan_cf",
+    "rating": 850,
+    "max_rating": 920,
+    "rank": "newbie",
+    "solved_count": 14,
+    "last_active_days": 12,
+    "source": "seed"
+  },
+  "priya_cf": {
+    "handle": "priya_cf",
+    "rating": 980,
+    "max_rating": 1050,
+    "rank": "newbie",
+    "solved_count": 21,
+    "last_active_days": 9,
+    "source": "seed"
+  },
+  "arjun_cf": {
+    "handle": "arjun_cf",
+    "rating": 760,
+    "max_rating": 800,
+    "rank": "newbie",
+    "solved_count": 8,
+    "last_active_days": 18,
+    "source": "seed"
+  },
+  "fatima_cf": {
+    "handle": "fatima_cf",
+    "rating": 1100,
+    "max_rating": 1180,
+    "rank": "pupil",
+    "solved_count": 34,
+    "last_active_days": 7,
+    "source": "seed"
+  }
+}

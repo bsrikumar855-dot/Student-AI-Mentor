@@ -61,6 +61,7 @@ class StudentState(BaseModel):
     goals_met_streak: int
     topics: List[TopicMemory]
     skills: List[str]
+    coding_handles: Dict[str, str] = {}
     risk: Optional[RiskResult] = None
     predictions: Optional[PredictionResult] = None
 

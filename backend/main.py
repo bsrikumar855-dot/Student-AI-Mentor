@@ -18,9 +18,10 @@ from backend.plan import build_plan
 from backend.language import phrase_intervention_message, chat_response
 from backend.retain import due_topics, apply_sm2
 from backend.internships import match_internships
+from backend.coding import get_codeforces
 
 app = FastAPI(
-    title="Polaris API",
+    title="Drishta API",
     description="Proactive AI student mentor backend services",
     version="1.0.0"
 )
@@ -174,6 +175,22 @@ async def get_student_internships(student_id: str):
             pass
             
     return match_internships(student.skills, student.cgpa, internships_db)
+
+@router.get("/students/{student_id}/coding")
+async def get_student_coding(student_id: str):
+    """Return a Codeforces coding profile for the student.
+    Falls back to seed/cached data when offline — never 500.
+    """
+    student = store.get_student(student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+
+    cf_handle = (student.coding_handles or {}).get("codeforces")
+    if not cf_handle:
+        return {"codeforces": None, "note": "No Codeforces handle registered for this student."}
+
+    profile = get_codeforces(cf_handle)
+    return {"codeforces": profile}
 
 @router.get("/students/{student_id}/reviews")
 async def get_student_reviews(student_id: str, due: Optional[str] = Query(None, regex="^(today|all)$")):
