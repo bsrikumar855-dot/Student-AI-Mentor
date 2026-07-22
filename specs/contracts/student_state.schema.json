@@ -173,16 +173,9 @@
                   },
                   "projected_score": {
                     "type": "number"
-                  },
-                  "fail_risk": {
-                    "type": "string",
-                    "enum": ["Low", "Medium", "High"]
-                  },
-                  "why": {
-                    "type": "string"
                   }
                 },
-                "required": ["subject", "projected_score", "fail_risk", "why"]
+                "required": ["subject", "projected_score"]
               }
             },
             "computed_at": {

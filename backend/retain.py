@@ -57,6 +57,7 @@ def recall_estimate(topic: TopicMemory, today: datetime = None) -> float:
 def due_topics(state: StudentState, today: datetime = None) -> List[Dict[str, Any]]:
     """
     Finds topics where next_review <= today OR recall < 0.6, sorted weakest-recall first.
+    Returns: [{topic, next_review, reps, why}]
     """
     if today is None:
         today = datetime.now()
@@ -72,10 +73,17 @@ def due_topics(state: StudentState, today: datetime = None) -> List[Dict[str, An
             days_since_learned = max(0, days_since_learned)
             due.append({
                 "topic": t.topic,
-                "recall": recall,
+                "next_review": t.next_review,
+                "reps": t.reps,
+                "recall": recall, # Keep recall internally for sorting
                 "why": f"Estimated recall of {recall*100:.0f}% after {days_since_learned} days since topic was learned."
             })
             
     # Sort weakest-recall first
     due.sort(key=lambda x: x["recall"])
+    
+    # Strip recall before returning to match expected keys exactly
+    for d in due:
+        d.pop("recall", None)
+        
     return due

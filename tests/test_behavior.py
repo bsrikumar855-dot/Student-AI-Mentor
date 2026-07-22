@@ -129,7 +129,8 @@ def test_predict_trends_behavior():
     res = predict_trends(student)
     assert res.projected_gpa == 9.0
     assert res.exam_trend == "improving"
-    assert res.exam_forecast[0].fail_risk == "Low"
+    assert res.exam_forecast[0].projected_score == 90.0
+
 
 def test_apply_sm2_behavior():
     from datetime import datetime

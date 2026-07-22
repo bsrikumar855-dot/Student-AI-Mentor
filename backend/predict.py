@@ -17,38 +17,22 @@ def predict_trends(student: StudentState) -> PredictionResult:
     projected_scores = []
     slopes = []
 
-    # Map exams by subject for easy lookup
     exam_map = {e.subject: e for e in student.exams}
-    
-    # We find d from nearest_exam.days_to_exam, or default to 14
     d = student.nearest_exam.days_to_exam if student.nearest_exam else 14
 
     for s in student.subjects:
-        # Calculate slope
         if len(s.trend) >= 2:
             slope = (s.trend[-1] - s.trend[0]) / (len(s.trend) - 1)
         else:
             slope = 0.0
             
         slopes.append(slope)
-        
         projected = clamp(s.latest + slope * (d / 7.0), 0.0, 100.0)
         projected_scores.append(projected)
         
-        if projected < 40:
-            fail_risk = "High"
-        elif projected < 55:
-            fail_risk = "Medium"
-        else:
-            fail_risk = "Low"
-            
-        why = f"{s.name}: {s.latest:.0f}% now, {'+' if slope>=0 else ''}{slope:.0f}/wk -> ~{projected:.0f}% at exam"
-        
         exam_forecast.append(ExamForecast(
             subject=s.name,
-            projected_score=projected,
-            fail_risk=fail_risk,
-            why=why
+            projected_score=projected
         ))
 
     if projected_scores:

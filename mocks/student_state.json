@@ -70,9 +70,7 @@
     "exam_forecast": [
       {
         "subject": "Data Structures",
-        "projected_score": 75.0,
-        "fail_risk": "Low",
-        "why": "Consistent performance"
+        "projected_score": 75.0
       }
     ],
     "computed_at": "2026-07-22T05:32:00Z"

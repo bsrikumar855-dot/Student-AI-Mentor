@@ -23,7 +23,7 @@ def evaluate_interventions(
     # 1. recovery_plan: days_since_active >= 5
     if student.days_since_active >= 5:
         interventions.append(Intervention(
-            id=f"{sid}:recovery_plan:active",
+            id=f"{sid}:recovery_plan",
             action="recovery_plan",
             why=f"Student has been inactive for {student.days_since_active} days.",
             kind="recovery",
@@ -35,7 +35,7 @@ def evaluate_interventions(
         ne = student.nearest_exam
         if ne.days_to_exam <= 7 and ne.completion < 0.5:
             interventions.append(Intervention(
-                id=f"{sid}:revision_timetable:{ne.subject.lower()}",
+                id=f"{sid}:revision_timetable",
                 action="revision_timetable",
                 why=f"Nearest exam '{ne.subject}' is in {ne.days_to_exam} days, but syllabus completion is only {ne.completion*100:.0f}%.",
                 kind="academic",
@@ -46,7 +46,7 @@ def evaluate_interventions(
     for s in student.subjects:
         if len(s.trend) >= 2 and s.trend[-1] < s.trend[-2]:
             interventions.append(Intervention(
-                id=f"{sid}:weak_topic:{s.name.lower()}",
+                id=f"{sid}:weak_topic",
                 action="weak_topic",
                 why=f"Recent downward grade trend in '{s.name}' ({s.trend[-2]} -> {s.latest}).",
                 kind="academic",
@@ -56,9 +56,8 @@ def evaluate_interventions(
     # 4. revision_mission: for each retain.due_topics(state)
     due = due_topics(student)
     for topic_due in due:
-        topic_slug = topic_due["topic"].lower().replace(" ", "_")
         interventions.append(Intervention(
-            id=f"{sid}:revision_mission:{topic_slug}",
+            id=f"{sid}:revision_mission",
             action="revision_mission",
             why=topic_due["why"],
             kind="academic",
@@ -68,7 +67,7 @@ def evaluate_interventions(
     # 5. ramp_difficulty: goals_met_streak >= 7
     if student.goals_met_streak >= 7:
         interventions.append(Intervention(
-            id=f"{sid}:ramp_difficulty:streak",
+            id=f"{sid}:ramp_difficulty",
             action="ramp_difficulty",
             why=f"Student is on a {student.goals_met_streak}-day goal completion streak.",
             kind="academic",
@@ -78,7 +77,7 @@ def evaluate_interventions(
     # 6. git_nudge: days_since_commit >= 10
     if student.days_since_commit >= 10:
         interventions.append(Intervention(
-            id=f"{sid}:git_nudge:commit",
+            id=f"{sid}:git_nudge",
             action="git_nudge",
             why=f"No GitHub commits for {student.days_since_commit} days.",
             kind="career",
@@ -88,7 +87,7 @@ def evaluate_interventions(
     # 7. linkedin_nudge: days_since_linkedin >= 14
     if student.days_since_linkedin >= 14:
         interventions.append(Intervention(
-            id=f"{sid}:linkedin_nudge:linkedin",
+            id=f"{sid}:linkedin_nudge",
             action="linkedin_nudge",
             why=f"No LinkedIn activity for {student.days_since_linkedin} days.",
             kind="career",
@@ -113,9 +112,8 @@ def evaluate_interventions(
     matches = match_internships(student.skills, student.cgpa, internships_db)
     ready_matches = [m for m in matches if m.match == 1.0]
     for m in ready_matches:
-        role_slug = m.title.lower().replace(" ", "_")
         interventions.append(Intervention(
-            id=f"{sid}:internship_match:{role_slug}",
+            id=f"{sid}:internship_match",
             action="internship_match",
             why=f"Eligible and ready for internship: {m.title} at {m.company}.",
             kind="career",
@@ -125,7 +123,7 @@ def evaluate_interventions(
     # 9. flag_at_risk: risk_state level is High
     if risk_state.level == "High":
         interventions.append(Intervention(
-            id=f"{sid}:flag_at_risk:risk",
+            id=f"{sid}:flag_at_risk",
             action="flag_at_risk",
             why=f"Overall risk level is High ({risk_state.score}/100).",
             kind="academic",

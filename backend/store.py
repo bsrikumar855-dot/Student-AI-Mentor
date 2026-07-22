@@ -2,16 +2,17 @@
 Data Store Module: In-memory storage for active student states, tasks, and completion streaks.
 """
 
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from backend.models import StudentState, Plan
 
 class InMemoryStore:
     """
-    Manages in-memory data storage for students and study plans.
+    Manages in-memory data storage for students and study plans, and tracks an audit log.
     """
     def __init__(self) -> None:
         self._students: Dict[str, StudentState] = {}
         self._plans: Dict[str, Plan] = {}
+        self.audit_log: List[Dict[str, Any]] = []
 
     def save_student(self, student: StudentState) -> None:
         self._students[student.student_id] = student

@@ -38,8 +38,6 @@ class RiskResult(BaseModel):
 class ExamForecast(BaseModel):
     subject: str
     projected_score: float
-    fail_risk: Literal["Low", "Medium", "High"]
-    why: str
 
 class PredictionResult(BaseModel):
     projected_gpa: float
@@ -81,7 +79,7 @@ class Intervention(BaseModel):
     why: str
     kind: Literal["academic", "career", "recovery", "wellness"]
     auto: bool
-    reviewed: bool = False # Flag to support approval / dismissal review
+    reviewed: bool = False
 
 class Plan(BaseModel):
     student_id: str
@@ -99,3 +97,8 @@ class InternshipMatch(BaseModel):
     have: List[str]
     missing: List[str]
     why: str
+
+class ChatRequest(BaseModel):
+    student_id: str
+    message: str
+    history: List[Dict[str, Any]] = []

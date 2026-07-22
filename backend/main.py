@@ -1,11 +1,13 @@
-from fastapi import FastAPI, HTTPException, UploadFile, status
+from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
+import json
+import os
 
 from backend.models import (
     StudentState, Plan, DailyTarget, ScheduleSlot, Intervention, 
-    RiskResult, PredictionResult, InternshipMatch, TopicMemory
+    RiskResult, PredictionResult, InternshipMatch, TopicMemory, ChatRequest
 )
 from backend.store import InMemoryStore
 from backend.ingest import ingest_excel
@@ -22,21 +24,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Global in-memory store
+router = APIRouter(prefix="/api/v1")
 store = InMemoryStore()
-
-class ChatRequest(BaseModel):
-    message: str
-    student_id: str
 
 class GradeRequest(BaseModel):
     quality: int = Field(..., ge=0, le=5)
 
 class ReviewRequest(BaseModel):
-    decision: str = Field(..., pattern="^(approve|dismiss)$")
+    decision: str = Field(..., pattern="^(approve|override)$")
+    note: Optional[str] = None
 
 def get_highest_priority_action(interventions: List[Intervention]) -> Optional[str]:
-    # Priority order: revision_timetable > recovery_plan > weak_topic > revision_mission > ramp_difficulty > career nudges
     priority = [
         "revision_timetable",
         "recovery_plan",
@@ -54,22 +52,15 @@ def get_highest_priority_action(interventions: List[Intervention]) -> Optional[s
     return None
 
 def generate_plan_for_student(student: StudentState) -> Plan:
-    # 1. Recalculate risk & predictions
     risk_state = calculate_risk(student)
     student.risk = risk_state
     
     preds = predict_trends(student)
     student.predictions = preds
     
-    # 2. Evaluate interventions
     active_interventions = evaluate_interventions(student, risk_state)
     
-    # 3. Build Daily Targets based on active interventions
     daily_targets = []
-    
-    # Kind mapping rules:
-    # revision_timetable -> review, weak_topic -> practice, recovery_plan -> recovery,
-    # ramp_difficulty -> stretch, git/linkedin/internship -> career, generic/other -> academic
     if not active_interventions:
         daily_targets.append(DailyTarget(
             id="T_GEN",
@@ -137,7 +128,7 @@ def generate_plan_for_student(student: StudentState) -> Plan:
     return plan
 
 
-@app.post("/ingest", status_code=status.HTTP_201_CREATED)
+@router.post("/ingest", status_code=status.HTTP_201_CREATED)
 async def ingest_cohort(file: UploadFile):
     try:
         students = ingest_excel(file.file)
@@ -147,63 +138,114 @@ async def ingest_cohort(file: UploadFile):
             detail=f"Failed to parse Excel file: {str(e)}"
         )
         
+    ingested_ids = []
+    skipped_ids = []
+    
     for student in students:
+        # Check idempotency on student_id
+        if store.get_student(student.student_id) is not None:
+            skipped_ids.append(student.student_id)
+            continue
+            
         plan = generate_plan_for_student(student)
         store.save_student(student)
         store.save_plan(student.student_id, plan)
+        ingested_ids.append(student.student_id)
         
-    return {"message": f"Successfully ingested {len(students)} students."}
+    return {
+        "ingested": len(ingested_ids),
+        "student_ids": ingested_ids,
+        "skipped": skipped_ids
+    }
 
-@app.get("/students")
-async def list_students():
+@router.get("/students")
+async def list_students(
+    band: Optional[str] = Query(None, regex="^(Low|Medium|High)$"),
+    sort: Optional[str] = Query(None, regex="^(risk_desc)$"),
+    limit: Optional[int] = Query(None, ge=1),
+    offset: Optional[int] = Query(0, ge=0)
+):
     students = store.list_students()
     result = []
+    
     for s in students:
-        result.append({
-            "student_id": s.student_id,
-            "name": s.name,
-            "risk": s.risk
-        })
+        if s.risk:
+            # Filter by band
+            if band and s.risk.level != band:
+                continue
+            
+            result.append({
+                "student_id": s.student_id,
+                "name": s.name,
+                "risk": {
+                    "level": s.risk.level,
+                    "score": s.risk.score,
+                    "reasons": s.risk.reasons
+                }
+            })
+            
+    # Sort
+    if sort == "risk_desc":
+        result.sort(key=lambda x: x["risk"]["score"], reverse=True)
+        
+    # Offset & limit
+    if offset:
+        result = result[offset:]
+    if limit:
+        result = result[:limit]
+        
     return result
 
-@app.get("/students/{student_id}/state")
+@router.get("/students/{student_id}/state")
 async def get_student_state(student_id: str):
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
     return student
 
-@app.get("/students/{student_id}/plan")
+@router.get("/students/{student_id}/plan")
 async def get_student_plan(student_id: str):
+    student = store.get_student(student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+        
     plan = store.get_plan(student_id)
     if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found.")
+        raise HTTPException(status_code=409, detail="Plan not found for student.")
     return plan
 
-@app.post("/students/{student_id}/plan/generate")
+@router.post("/students/{student_id}/plan/generate")
 async def generate_student_plan(student_id: str):
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
+        
     plan = generate_plan_for_student(student)
     store.save_student(student)
     store.save_plan(student_id, plan)
+    
+    # Audit log entry
+    store.audit_log.append({
+        "action": "plan_generate",
+        "student_id": student_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
     return plan
 
-@app.get("/students/{student_id}/predictions")
+@router.get("/students/{student_id}/predictions")
 async def get_student_predictions(student_id: str):
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
     return student.predictions
 
-@app.get("/students/{student_id}/internships")
+@router.get("/students/{student_id}/internships")
 async def get_student_internships(student_id: str):
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
     
-    # Load internships db
     base_dir = os.path.dirname(os.path.dirname(__file__))
     db_path = os.path.join(base_dir, "backend", "data", "internships.json")
     if not os.path.exists(db_path):
@@ -218,14 +260,24 @@ async def get_student_internships(student_id: str):
             
     return match_internships(student.skills, student.cgpa, internships_db)
 
-@app.get("/students/{student_id}/reviews")
-async def get_student_reviews(student_id: str):
+@router.get("/students/{student_id}/reviews")
+async def get_student_reviews(student_id: str, due: Optional[str] = Query(None, regex="^(today|all)$")):
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
-    return due_topics(student)
+        
+    all_due = due_topics(student)
+    
+    if due == "today":
+        today_dt = datetime.now()
+        # Filter down by next review <= today
+        # Note: retain.due_topics output dictionary has 'next_review' key as datetime
+        filtered = [t for t in all_due if t["next_review"].replace(tzinfo=None) <= today_dt.replace(tzinfo=None)]
+        return filtered
+        
+    return all_due
 
-@app.post("/students/{student_id}/reviews/{topic}/grade")
+@router.post("/students/{student_id}/reviews/{topic}/grade")
 async def grade_topic_review(student_id: str, topic: str, payload: GradeRequest):
     student = store.get_student(student_id)
     if not student:
@@ -242,20 +294,18 @@ async def grade_topic_review(student_id: str, topic: str, payload: GradeRequest)
         
     updated_topic = apply_sm2(target_topic, payload.quality)
     
-    # Update topic in list
     for idx, t in enumerate(student.topics):
         if t.topic.lower() == topic.lower():
             student.topics[idx] = updated_topic
             break
             
-    # Regenerate plan & save
     plan = generate_plan_for_student(student)
     store.save_student(student)
     store.save_plan(student_id, plan)
     
-    return {"message": "Grade applied successfully.", "topic": updated_topic}
+    return updated_topic
 
-@app.post("/students/{student_id}/tasks/{task_id}/complete")
+@router.post("/students/{student_id}/tasks/{task_id}/complete")
 async def complete_student_task(student_id: str, task_id: str):
     student = store.get_student(student_id)
     plan = store.get_plan(student_id)
@@ -277,13 +327,17 @@ async def complete_student_task(student_id: str, task_id: str):
         
     store.save_student(student)
     store.save_plan(student_id, plan)
-    return plan
+    return {
+        "student_id": student_id,
+        "task_id": task_id,
+        "done": any(t.done for t in plan.daily_targets if t.id == task_id),
+        "goals_met_streak": student.goals_met_streak
+    }
 
-@app.post("/interventions/{intervention_id}/review")
+@router.post("/interventions/{intervention_id}/review")
 async def review_intervention(intervention_id: str, payload: ReviewRequest):
-    # Find student ID by splitting prefix before first colon
     parts = intervention_id.split(":")
-    if not parts:
+    if len(parts) < 2:
         raise HTTPException(status_code=400, detail="Invalid intervention ID format.")
     student_id = parts[0]
     
@@ -300,16 +354,33 @@ async def review_intervention(intervention_id: str, payload: ReviewRequest):
     if not found_inter:
         raise HTTPException(status_code=404, detail="Intervention not found in student plan.")
         
-    if payload.decision == "approve":
-        found_inter.reviewed = True
-    elif payload.decision == "dismiss":
-        # Simply mark reviewed as True or remove
-        found_inter.reviewed = True
+    # Validate auto: false intervention review constraint
+    if found_inter.auto:
+        raise HTTPException(status_code=400, detail="Only human-in-the-loop (auto: false) interventions can be reviewed.")
         
+    found_inter.reviewed = True
+    
     store.save_plan(student_id, plan)
-    return {"message": "Intervention reviewed successfully.", "intervention": found_inter}
+    
+    store.audit_log.append({
+        "action": "intervention_review",
+        "intervention_id": intervention_id,
+        "decision": payload.decision,
+        "note": payload.note,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "intervention_id": intervention_id,
+        "status": "reviewed",
+        "reviewed_by": "faculty",
+        "at": datetime.now(timezone.utc).isoformat()
+    }
 
-@app.post("/chat")
+@router.post("/chat")
 async def chat_endpoint(payload: ChatRequest):
-    reply = chat_response(payload.message, [])
-    return {"reply": reply}
+    reply = chat_response(payload.message, payload.history)
+    return {"reply": reply, "used_llm": False}
+
+
+app.include_router(router)
