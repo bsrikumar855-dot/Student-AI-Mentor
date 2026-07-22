@@ -1,27 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #F9F8F6;
-  --color-surface: #F3F0EA;
-  --color-primary: #2C4C3B;
-  --color-brass: #B89768;
-  --color-ink: #1C1E1D;
+  --color-bg: #0A0E17;
+  --color-surface: #131826;
+  --color-primary: #7C6FF0;
+  --color-brass: #E0A458;
+  --color-ink: #EAEEF7;
   
-  --color-primary-deep: #1F3A2C;
-  --color-primary-tint: #E7ECE7;
-  --color-brass-bright: #CBA97C;
-  --color-ink-soft: #4A4E4B;
-  --color-hairline: #DAD5C9;
-  --color-parchment-edge: #EDE7D9;
+  --color-primary-deep: #5B4FD0;
+  --color-primary-tint: #1C2136;
+  --color-brass-bright: #F2C57C;
+  --color-ink-soft: #98A2B8;
+  --color-hairline: #232A3A;
+  --color-parchment-edge: #1A2030;
   
-  --color-risk-low: #2C4C3B;
-  --color-risk-medium: #B89768;
-  --color-risk-high: #7A3B34;
-  --color-risk-crit: #5A2622;
+  --color-risk-low: #34D399;
+  --color-risk-medium: #FBBF24;
+  --color-risk-high: #F43F5E;
+  --color-risk-crit: #991b1b;
 
-  --font-display: "Fraunces", serif;
-  --font-ceremonial: "Cormorant Garamond", serif;
-  --font-body: "Hanken Grotesk", sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-ceremonial: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
   --font-mono: "Spline Sans Mono", monospace;
 }
 
@@ -54,7 +54,7 @@
     background: linear-gradient(
       to right,
       transparent,
-      rgba(203, 169, 124, 0.4), /* brass-bright */
+      rgba(242, 197, 124, 0.4), /* brass-bright */
       transparent
     );
     transform: skewX(-20deg);
@@ -67,7 +67,7 @@
 
   .engraved-text {
     color: var(--color-ink);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
   }
   
   .pressed-plate {
@@ -75,11 +75,15 @@
   }
   
   .lift-shadow {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
   .lift-shadow:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 24px rgba(124, 111, 240, 0.15);
+  }
+
+  .glow-cta {
+    box-shadow: 0 0 24px rgba(124,111,240,.25);
   }
 }

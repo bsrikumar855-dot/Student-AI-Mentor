@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, type StudentState, type StudentPlan, type ReviewTopic, type InternshipMatch, type Prediction } from '../lib/api';
+import { api, type StudentState, type StudentPlan, type ReviewTopic, type InternshipMatch, type Prediction, type CodingProfile } from '../lib/api';
 import { Plate, EngravedText, BrassRule } from '../components/ui/Plates';
 import { LivingCrest } from '../components/ui/LivingCrest';
 import { WaxSeal } from '../components/ui/WaxSeal';
@@ -7,8 +7,9 @@ import { Sparkline } from '../components/ui/Sparkline';
 import { MentorDrawer } from '../components/student/MentorDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
 import { NavBar } from '../components/ui/NavBar';
+import { Terminal } from 'lucide-react';
 
-const TABS = ['Today', 'Me', 'Reviews', 'Internships', 'Predictions'] as const;
+const TABS = ['Today', 'Me', 'Coding', 'Reviews', 'Internships', 'Predictions'] as const;
 type Tab = typeof TABS[number];
 
 const StudentHome: React.FC = () => {
@@ -22,6 +23,7 @@ const StudentHome: React.FC = () => {
   const [reviews, setReviews] = useState<ReviewTopic[]>([]);
   const [internships, setInternships] = useState<InternshipMatch[]>([]);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [coding, setCoding] = useState<CodingProfile | null>(null);
 
   const fetchStudentData = () => {
     api.getState('STU_HERO').then(setState);
@@ -38,6 +40,7 @@ const StudentHome: React.FC = () => {
     if (tab === 'Reviews' && reviews.length === 0) setReviews(await api.getReviewsDueToday('stu_123'));
     if (tab === 'Internships' && internships.length === 0) setInternships(await api.getInternships('stu_123'));
     if (tab === 'Predictions' && predictions.length === 0) setPredictions(await api.getPredictions('stu_123'));
+    if (tab === 'Coding' && !coding) setCoding(await api.getCoding('stu_123'));
   };
 
   useEffect(() => {
@@ -123,6 +126,7 @@ const StudentHome: React.FC = () => {
           >
             {activeTab === 'Today' && <TodayTab plan={plan} />}
             {activeTab === 'Me' && <MeTab state={state} />}
+            {activeTab === 'Coding' && <CodingTab coding={coding} />}
             {activeTab === 'Reviews' && <ReviewsTab reviews={reviews} />}
             {activeTab === 'Internships' && <InternshipsTab internships={internships} />}
             {activeTab === 'Predictions' && <PredictionsTab predictions={predictions} />}
@@ -396,5 +400,208 @@ const PredictionsTab = ({ predictions }: { predictions: Prediction[] }) => (
     ))}
   </div>
 );
+
+const CodingTab = ({ coding }: { coding: any }) => {
+  const codeforces = coding || {
+    handle: "AishaCF",
+    rating: 1350,
+    max_rating: 1400,
+    rank: "pupil",
+    solved_count: 84,
+    last_active_days: 2
+  };
+
+  const totalSolved = (codeforces.solved_count || 0) + 142 + 45; //CF + LeetCode + HackerRank
+  const activeDays = Math.max(30 - (codeforces.last_active_days || 0), 12); // CF / LeetCode active days estimate
+
+  return (
+    <div className="space-y-8 animate-fade-in">
+      {/* Aggregate Header */}
+      <Plate className="p-6 bg-surface border border-hairline relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Terminal className="w-5 h-5 text-primary" />
+              <span className="font-mono text-xs uppercase tracking-widest text-ink-soft">Drishta Coding Matrix</span>
+            </div>
+            <p className="font-ceremonial text-xl text-primary-deep italic">
+              "Consistent practice keeps your DSA sharp — here's where you stand."
+            </p>
+          </div>
+          <div className="flex gap-6 shrink-0 font-mono">
+            <div className="bg-bg/40 border border-hairline/50 px-4 py-2 rounded">
+              <span className="block text-[10px] text-ink-soft uppercase tracking-wider">Total Solved</span>
+              <span className="text-2xl font-bold text-brass">{totalSolved} Problems</span>
+            </div>
+            <div className="bg-bg/40 border border-hairline/50 px-4 py-2 rounded">
+              <span className="block text-[10px] text-ink-soft uppercase tracking-wider">Active Cycle</span>
+              <span className="text-2xl font-bold text-primary">{activeDays} Days</span>
+            </div>
+          </div>
+        </div>
+      </Plate>
+
+      {/* Grid of platforms */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Codeforces - LIVE */}
+        <Plate className="p-6 bg-surface border border-hairline flex flex-col justify-between h-[360px] relative lift-shadow group hover:border-[#FF5959]/50">
+          <div>
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded bg-[#FF5959]/10 flex items-center justify-center text-[#FF5959] font-bold text-sm">CF</div>
+                <span className="font-display font-semibold text-lg">Codeforces</span>
+              </div>
+              <span className="px-2 py-0.5 text-[9px] font-mono uppercase bg-[#FF5959]/20 text-[#FF5959] border border-[#FF5959]/30 rounded">Live</span>
+            </div>
+            
+            <div className="my-6 flex flex-col items-center">
+              {/* Circular Progress Ring */}
+              <div className="relative w-24 h-24 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle cx="48" cy="48" r="40" stroke="var(--color-hairline)" strokeWidth="6" fill="transparent" />
+                  <circle cx="48" cy="48" r="40" stroke="#FF5959" strokeWidth="6" fill="transparent"
+                          strokeDasharray={String(2 * Math.PI * 40)}
+                          strokeDashoffset={String(2 * Math.PI * 40 * (1 - Math.min(codeforces.rating || 1200, 2000) / 2000))} />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-lg font-bold font-mono">{codeforces.rating || 1350}</span>
+                  <span className="text-[9px] text-ink-soft uppercase tracking-wider font-mono">Rating</span>
+                </div>
+              </div>
+              <span className="mt-3 px-3 py-0.5 text-[10px] uppercase font-mono font-bold rounded bg-[#FF5959]/10 text-[#FF5959] border border-[#FF5959]/20">
+                {codeforces.rank || "pupil"}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2 font-mono text-xs border-t border-hairline/50 pt-4">
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Solved:</span>
+              <span className="font-bold text-ink">{codeforces.solved_count || 84}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Max Rating:</span>
+              <span className="text-ink">{codeforces.max_rating || 1400}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Last Active:</span>
+              <span className="text-ink">{codeforces.last_active_days || 2}d ago</span>
+            </div>
+          </div>
+        </Plate>
+
+        {/* LeetCode - DEMO */}
+        <Plate className="p-6 bg-surface border border-hairline flex flex-col justify-between h-[360px] relative lift-shadow group hover:border-[#FFA116]/50">
+          <div>
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded bg-[#FFA116]/10 flex items-center justify-center text-[#FFA116] font-bold text-sm">LC</div>
+                <span className="font-display font-semibold text-lg">LeetCode</span>
+              </div>
+              <span className="px-2 py-0.5 text-[9px] font-mono uppercase bg-brass/20 text-brass border border-brass/30 rounded">Demo</span>
+            </div>
+
+            <div className="my-6 flex flex-col items-center">
+              <div className="text-4xl font-bold font-mono text-[#FFA116] mb-1">142</div>
+              <span className="text-[10px] text-ink-soft uppercase tracking-wider font-mono">Solved Problems</span>
+              <div className="mt-3 flex gap-1.5 text-[9px] font-mono">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">E: 78</span>
+                <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">M: 55</span>
+                <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">H: 9</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 font-mono text-xs border-t border-hairline/50 pt-4">
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Contest Rating:</span>
+              <span className="font-bold text-[#FFA116]">1680</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Streak:</span>
+              <span className="text-ink">12 Days</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Last Active:</span>
+              <span className="text-ink">Today</span>
+            </div>
+          </div>
+        </Plate>
+
+        {/* HackerRank - DEMO */}
+        <Plate className="p-6 bg-surface border border-hairline flex flex-col justify-between h-[360px] relative lift-shadow group hover:border-[#2EC866]/50">
+          <div>
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded bg-[#2EC866]/10 flex items-center justify-center text-[#2EC866] font-bold text-sm">HR</div>
+                <span className="font-display font-semibold text-lg">HackerRank</span>
+              </div>
+              <span className="px-2 py-0.5 text-[9px] font-mono uppercase bg-brass/20 text-brass border border-brass/30 rounded">Demo</span>
+            </div>
+
+            <div className="my-6 flex flex-col items-center">
+              <div className="text-4xl font-bold font-mono text-[#2EC866] mb-1">5★</div>
+              <span className="text-[10px] text-ink-soft uppercase tracking-wider font-mono">Problem Solving</span>
+              <div className="mt-3 text-[10px] font-mono text-brass-bright font-bold">
+                Gold Badge - Python & SQL
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 font-mono text-xs border-t border-hairline/50 pt-4">
+            <div className="flex justify-between">
+              <span className="text-ink-soft">SQL Rating:</span>
+              <span className="font-bold text-[#2EC866]">3★ SQL</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Badges:</span>
+              <span className="text-ink">4 Earned</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Last Active:</span>
+              <span className="text-ink">4d ago</span>
+            </div>
+          </div>
+        </Plate>
+
+        {/* GitHub - DEMO */}
+        <Plate className="p-6 bg-surface border border-hairline flex flex-col justify-between h-[360px] relative lift-shadow group hover:border-primary/50">
+          <div>
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded bg-primary-tint flex items-center justify-center text-primary font-bold text-sm">GH</div>
+                <span className="font-display font-semibold text-lg">GitHub</span>
+              </div>
+              <span className="px-2 py-0.5 text-[9px] font-mono uppercase bg-brass/20 text-brass border border-brass/30 rounded">Demo</span>
+            </div>
+
+            <div className="my-6 flex flex-col items-center">
+              <div className="text-4xl font-bold font-mono text-primary mb-1">87</div>
+              <span className="text-[10px] text-ink-soft uppercase tracking-wider font-mono">Commits (30d)</span>
+              <div className="mt-3 text-[10px] font-mono text-emerald-400">
+                Active Contribution Wave
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 font-mono text-xs border-t border-hairline/50 pt-4">
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Repositories:</span>
+              <span className="font-bold text-ink">6 Repos</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Last Push:</span>
+              <span className="text-ink">2d ago</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-soft">Followers:</span>
+              <span className="text-ink">18 developers</span>
+            </div>
+          </div>
+        </Plate>
+      </div>
+    </div>
+  );
+};
 
 export default StudentHome;

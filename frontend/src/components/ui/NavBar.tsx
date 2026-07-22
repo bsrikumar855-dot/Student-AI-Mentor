@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useRole } from '../../contexts/RoleContext';
+import { Eye } from 'lucide-react';
 
 export const NavBar: React.FC = () => {
   const { setRole } = useRole();
@@ -9,9 +10,12 @@ export const NavBar: React.FC = () => {
   return (
     <nav className="bg-bg border-b border-hairline py-4 px-8 shadow-sm z-30 relative">
       <div className="max-w-6xl mx-auto flex justify-between items-center">
-        <Link to="/" className="flex flex-col group">
-          <span className="font-ceremonial text-2xl font-bold tracking-wider text-primary group-hover:text-brass transition-colors">Drishta</span>
-          <span className="font-mono text-[9px] uppercase tracking-widest text-ink-soft">Sees the student. Shows the reason.</span>
+        <Link to="/" className="flex items-center gap-2 group">
+          <Eye className="w-6 h-6 text-primary group-hover:text-brass transition-colors" />
+          <div className="flex flex-col">
+            <span className="font-ceremonial text-2xl font-bold tracking-wider text-primary group-hover:text-brass transition-colors">Drishta</span>
+            <span className="font-mono text-[9px] uppercase tracking-widest text-ink-soft">Sees the student. Shows the reason.</span>
+          </div>
         </Link>
         <div className="flex items-center gap-4">
           <Link 
