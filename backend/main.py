@@ -20,10 +20,19 @@ from backend.retain import due_topics, apply_sm2
 from backend.internships import match_internships
 from backend.coding import get_codeforces
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="Drishta API",
     description="Proactive AI student mentor backend services",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 router = APIRouter(prefix="/api/v1")
