@@ -22,10 +22,15 @@ const StudentHome: React.FC = () => {
   const [internships, setInternships] = useState<InternshipMatch[]>([]);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
 
+  const fetchStudentData = () => {
+    api.getState('STU_HERO').then(setState);
+    api.getPlan('STU_HERO').then(setPlan);
+  };
+
   useEffect(() => {
-    // Load initial data
-    api.getState('stu_123').then(setState);
-    api.getPlan('stu_123').then(setPlan);
+    fetchStudentData();
+    window.addEventListener('api-refresh', fetchStudentData);
+    return () => window.removeEventListener('api-refresh', fetchStudentData);
   }, []);
 
   const loadTabData = async (tab: Tab) => {

@@ -1,15 +1,79 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { api, type StudentSummary, type Intervention, type IngestJob } from '../lib/api';
+import { api, type StudentSummary, type Intervention, type IngestJob, type RiskBand } from '../lib/api';
 import { Plate } from '../components/ui/Plates';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const TABS = ['Cohort', 'Pending Reviews'] as const;
 type Tab = typeof TABS[number];
 
+const AnimatedRiskBadge: React.FC<{ riskBand: RiskBand; score?: number }> = ({ riskBand, score }) => {
+  const [displayScore, setDisplayScore] = useState<number | undefined>(score);
+
+  useEffect(() => {
+    if (score === undefined) return;
+    if (displayScore === undefined) {
+      setDisplayScore(score);
+      return;
+    }
+    if (displayScore === score) return;
+
+    const start = displayScore;
+    const end = score;
+    const startTime = performance.now();
+    const duration = 800;
+
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const current = Math.round(start + (end - start) * progress);
+      setDisplayScore(current);
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      }
+    };
+    requestAnimationFrame(step);
+  }, [score]);
+
+  const colorMap: Record<RiskBand, string> = {
+    low: '#16a34a',
+    medium: '#d97706', // amber
+    high: '#dc2626',   // red
+    crit: '#991b1b',
+  };
+
+  return (
+    <motion.span
+      layout
+      className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono rounded-full text-white font-semibold transition-colors duration-700 shadow-sm"
+      style={{ backgroundColor: colorMap[riskBand] || colorMap.low }}
+    >
+      <span>{riskBand.toUpperCase()}</span>
+      {displayScore !== undefined && (
+        <span className="opacity-90">({displayScore})</span>
+      )}
+    </motion.span>
+  );
+};
+
 const FacultyConsole: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('Cohort');
   const [isIngesting, setIsIngesting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleSimulateDrift = async () => {
+    setIsProcessing(true);
+    await api.driftHero();
+    window.dispatchEvent(new Event('api-refresh'));
+    setIsProcessing(false);
+  };
+
+  const handleResetDemo = async () => {
+    setIsProcessing(true);
+    await api.resetDemo();
+    window.dispatchEvent(new Event('api-refresh'));
+    setIsProcessing(false);
+  };
 
   return (
     <div className="min-h-screen bg-surface flex flex-col pb-12">
@@ -33,15 +97,20 @@ const FacultyConsole: React.FC = () => {
             </div>
           </div>
           
-          <div className="flex gap-4">
+          <div className="flex gap-3 items-center">
             <button 
-              onClick={async () => {
-                await api.driftHero();
-                window.dispatchEvent(new Event('api-refresh'));
-              }}
-              className="mb-3 px-4 py-2 bg-red-800 text-white font-mono uppercase text-sm tracking-widest rounded-sm hover:opacity-90 transition-opacity"
+              onClick={handleSimulateDrift}
+              disabled={isProcessing}
+              className="mb-3 px-4 py-2 bg-red-700 text-white font-mono uppercase text-sm tracking-widest rounded-sm hover:bg-red-800 disabled:opacity-50 transition-all shadow-sm"
             >
-              Simulate Drift
+              {isProcessing ? "Processing..." : "Simulate Drift"}
+            </button>
+            <button 
+              onClick={handleResetDemo}
+              disabled={isProcessing}
+              className="mb-3 px-4 py-2 bg-surface text-ink border border-hairline font-mono uppercase text-sm tracking-widest rounded-sm hover:bg-bg disabled:opacity-50 transition-all"
+            >
+              {isProcessing ? "Resetting..." : "Reset"}
             </button>
             <button 
               onClick={() => setIsIngesting(true)}
@@ -76,13 +145,24 @@ const FacultyConsole: React.FC = () => {
   );
 };
 
+const riskOrder: Record<RiskBand, number> = {
+  high: 1,
+  crit: 1,
+  medium: 2,
+  low: 3,
+};
+
 const CohortTab = () => {
   const [students, setStudents] = useState<StudentSummary[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const fetchStudents = () => {
-    api.getStudents('all').then(setStudents);
+  const fetchStudents = async () => {
+    setLoading(true);
+    const data = await api.getStudents('all');
+    setStudents(data);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -90,6 +170,32 @@ const CohortTab = () => {
     window.addEventListener('api-refresh', fetchStudents);
     return () => window.removeEventListener('api-refresh', fetchStudents);
   }, []);
+
+  const sortedStudents = [...students].sort((a, b) => {
+    const orderA = riskOrder[a.riskBand] || 4;
+    const orderB = riskOrder[b.riskBand] || 4;
+    if (orderA !== orderB) return orderA - orderB;
+    return (b.score || 0) - (a.score || 0);
+  });
+
+  if (loading && students.length === 0) {
+    return (
+      <Plate className="p-12 flex justify-center items-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="font-mono text-sm text-ink-soft">Loading Cohort Data...</span>
+        </div>
+      </Plate>
+    );
+  }
+
+  if (!loading && students.length === 0) {
+    return (
+      <Plate className="p-12 text-center font-body text-ink-soft">
+        No students found in the cohort.
+      </Plate>
+    );
+  }
 
   return (
     <Plate className="overflow-hidden bg-bg">
@@ -103,26 +209,32 @@ const CohortTab = () => {
           </tr>
         </thead>
         <tbody>
-          {students.map((stu, i) => (
-            <motion.tr 
-              key={stu.id}
-              onClick={() => navigate(`/console/${stu.id}`, { state: { backgroundLocation: location } })}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="border-b border-hairline/50 hover:bg-surface/50 cursor-pointer transition-colors"
-            >
-              <td className="py-4 px-6 font-display text-lg">{stu.name}</td>
-              <td className="py-4 px-6 text-ink-soft capitalize">{stu.segment}</td>
-              <td className="py-4 px-6">
-                <span className={`inline-block px-3 py-1 text-xs font-mono rounded-full text-surface bg-risk-${stu.riskBand}`}
-                      style={{ backgroundColor: `var(--color-risk-${stu.riskBand})` }}>
-                  {stu.riskBand.toUpperCase()}
-                </span>
-              </td>
-              <td className="py-4 px-6 text-right font-mono text-ink-soft text-sm">{stu.lastActive}</td>
-            </motion.tr>
-          ))}
+          <AnimatePresence>
+            {sortedStudents.map((stu) => (
+              <motion.tr 
+                layout
+                key={stu.id}
+                onClick={() => navigate(`/console/${stu.id}`, { state: { backgroundLocation: location } })}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ type: 'spring', stiffness: 250, damping: 25 }}
+                className="border-b border-hairline/50 hover:bg-surface/50 cursor-pointer transition-colors"
+              >
+                <td className="py-4 px-6 font-display text-lg flex items-center gap-2">
+                  <span>{stu.name}</span>
+                  {stu.id === 'STU_HERO' && (
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-brass/20 text-brass border border-brass/30 rounded">Hero Student</span>
+                  )}
+                </td>
+                <td className="py-4 px-6 text-ink-soft capitalize">{stu.segment}</td>
+                <td className="py-4 px-6">
+                  <AnimatedRiskBadge riskBand={stu.riskBand} score={stu.score} />
+                </td>
+                <td className="py-4 px-6 text-right font-mono text-ink-soft text-sm">{stu.lastActive}</td>
+              </motion.tr>
+            ))}
+          </AnimatePresence>
         </tbody>
       </table>
     </Plate>
@@ -131,16 +243,32 @@ const CohortTab = () => {
 
 const PendingReviewsTab = () => {
   const [interventions, setInterventions] = useState<Intervention[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [notes, setNotes] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    api.getInterventions('pending').then(setInterventions);
+    setLoading(true);
+    api.getInterventions('pending').then(data => {
+      setInterventions(data);
+      setLoading(false);
+    });
   }, []);
 
   const handleReview = async (id: string, action: 'approve' | 'reject') => {
     await api.reviewIntervention(id, action, notes[id]);
     setInterventions(prev => prev.filter(i => i.id !== id));
   };
+
+  if (loading && interventions.length === 0) {
+    return (
+      <Plate className="p-12 flex justify-center items-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="font-mono text-sm text-ink-soft">Loading Interventions...</span>
+        </div>
+      </Plate>
+    );
+  }
 
   if (interventions.length === 0) return <div className="text-center py-20 font-body text-ink-soft">No pending interventions.</div>;
 
@@ -197,10 +325,8 @@ const IngestModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void
       setJob(null);
       const run = async () => {
         const { jobId } = await api.startIngest();
-        // Simulate polling
         let currentJob = await api.pollIngest(jobId);
         setJob(currentJob);
-        // We'll just set it to completed right away for the mock, but we can animate rows
       };
       run();
     }
@@ -233,7 +359,6 @@ const IngestModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void
               </div>
             ) : (
               <div>
-                {/* Ledger filing motion representation */}
                 <div className="h-32 relative border-y border-hairline bg-surface overflow-hidden mb-6 flex flex-col justify-end">
                   {[1,2,3,4,5].map(i => (
                     <motion.div 
@@ -269,7 +394,6 @@ const IngestModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void
                     animate={{ scaleY: 1 }}
                     className="bg-surface border-l-2 border-risk-high p-3 mb-6 relative overflow-hidden"
                   >
-                    {/* Dog-eared corner */}
                     <div className="absolute top-0 right-0 border-l-[16px] border-b-[16px] border-l-transparent border-b-bg" />
                     <p className="font-body text-xs text-ink-soft">Notice: {job.skippedRows} records skipped due to missing prerequisite maps.</p>
                   </motion.div>
