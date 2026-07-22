@@ -63,7 +63,41 @@
       "activity_recency": 0.28,
       "trend": 0.23
     },
-    "computed_at": "2026-07-22T05:32:00Z"
+    "computed_at": "2026-07-22T05:32:00Z",
+    "confidence": 1.0,
+    "explanation": {
+      "summary": "Risk level is Medium with a score of 45.",
+      "contributions": [
+        {
+          "name": "score_gap",
+          "value": 0.15,
+          "weight": 0.35,
+          "contribution": 0.0525,
+          "detail": "Academic scores below target in Database Systems (average gap 15.0%)."
+        },
+        {
+          "name": "syllabus_behind",
+          "value": 0.32,
+          "weight": 0.25,
+          "contribution": 0.08,
+          "detail": "Syllabus completion is low (30.0%) for Database Systems exam in 14 days."
+        },
+        {
+          "name": "activity_recency",
+          "value": 0.28,
+          "weight": 0.25,
+          "contribution": 0.07,
+          "detail": "Student has been inactive for 2 days."
+        },
+        {
+          "name": "trend",
+          "value": 0.23,
+          "weight": 0.15,
+          "contribution": 0.0345,
+          "detail": "Downward trend in Database Systems (average drop 23.0%)."
+        }
+      ]
+    }
   },
   "predictions": {
     "projected_gpa": 6.9,

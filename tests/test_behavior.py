@@ -331,6 +331,12 @@ def test_risk_golden_file_behavior():
     assert "Low — Student has been inactive for 2 days." in res.reasons
     assert "Syllabus completion is low (60.0%) for Data Structures exam in 10 days." in res.reasons
 
+    # Assert new explanation field validates and components sum roughly to the score
+    assert res.explanation is not None
+    assert len(res.explanation.contributions) == 4
+    total_contribution = sum(c.contribution for c in res.explanation.contributions)
+    assert round(total_contribution * 100) == res.score
+
 def test_hand_reasoned_golden_students():
     from backend.models import StudentState, Subject, Exam, TopicMemory
     from datetime import datetime, timezone

@@ -68,10 +68,8 @@ def calculate_risk(student: StudentState) -> RiskResult:
     else:
         level = "Low"
 
-    # Find dominant term
-    dominant = max(weighted_terms, key=lambda k: weighted_terms[k])
-    dominant_val = weighted_terms[dominant]
-
+    from backend.models import FeatureContribution, Explanation
+    
     # Build human-readable detail strings that cite real subject data (SPEC: "citing real data")
     below_target = [s.name for s in student.subjects if s.latest < TARGET]
     declining = [s.name for s in student.subjects if len(s.trend) >= 2 and s.trend[0] > 0 and s.trend[-1] < s.trend[0]]
@@ -95,14 +93,45 @@ def calculate_risk(student: StudentState) -> RiskResult:
             else f"Slight downward grade trend (average drop {trend*100:.1f}%)."
         ),
     }
+    
+    # Build FeatureContribution objects
+    contributions = []
+    for term, weight in WEIGHTS.items():
+        val = {
+            "score_gap": score_gap,
+            "syllabus_behind": syllabus_behind,
+            "activity_recency": activity_recency,
+            "trend": trend,
+        }[term]
+        
+        contributions.append(FeatureContribution(
+            name=term,
+            value=val,
+            weight=weight,
+            contribution=weighted_terms[term],
+            detail=details[term]
+        ))
+        
+    explanation = Explanation(
+        summary=f"Risk level is {level} with a score of {score}.",
+        contributions=contributions
+    )
 
-    reasons = [f"{level} — {details[dominant]}"]
+    # Derive reasons FROM the explanation
+    if not contributions:
+        dominant_contrib = None
+    else:
+        dominant_contrib = max(contributions, key=lambda c: c.contribution)
 
-    # Add secondary reasons (contribution within 20% of dominant)
-    if dominant_val > 0.0:
-        for term, val in weighted_terms.items():
-            if term != dominant and val >= 0.8 * dominant_val:
-                reasons.append(details[term])
+    if dominant_contrib:
+        reasons = [f"{level} — {dominant_contrib.detail}"]
+        dominant_val = dominant_contrib.contribution
+        if dominant_val > 0.0:
+            for c in contributions:
+                if c.name != dominant_contrib.name and c.contribution >= 0.8 * dominant_val:
+                    reasons.append(c.detail)
+    else:
+        reasons = []
 
     computed_at = datetime.now(timezone.utc).isoformat()
 
@@ -111,6 +140,8 @@ def calculate_risk(student: StudentState) -> RiskResult:
         level=level,
         reasons=reasons,
         components=components,
-        computed_at=computed_at
+        computed_at=computed_at,
+        explanation=explanation,
+        confidence=1.0
     )
 

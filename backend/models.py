@@ -28,12 +28,57 @@ class RiskComponents(BaseModel):
     activity_recency: float
     trend: float
 
+class FeatureContribution(BaseModel):
+    name: str
+    value: float
+    weight: float
+    contribution: float
+    detail: str
+
+class Explanation(BaseModel):
+    summary: str
+    contributions: List[FeatureContribution]
+
 class RiskResult(BaseModel):
     score: int
     level: Literal["Low", "Medium", "High"]
     reasons: List[str]
     components: RiskComponents
     computed_at: str
+    explanation: Optional[Explanation] = None
+    confidence: float = 1.0
+
+class DerivedSignal(BaseModel):
+    student_id: str
+    name: str
+    value: Any
+    source: str
+    fetched_at: str
+    ttl: Optional[int] = None
+    status: str
+    confidence: float
+    version: str
+
+class DecisionTrace(BaseModel):
+    id: str
+    tenant_id: str = "default"
+    student_id: str
+    decision_type: str
+    input_snapshot_ids: List[str]
+    config_version: str
+    model_version: str
+    output: Dict[str, Any]
+    confidence: float
+    created_at: str
+
+class CodingProfileSnapshot(BaseModel):
+    handle: str
+    platform: str
+    rating: Optional[int] = None
+    solved_count: Optional[int] = None
+    last_active_days: Optional[int] = None
+    fetched_at: str
+    source: str
 
 class ExamForecast(BaseModel):
     subject: str
