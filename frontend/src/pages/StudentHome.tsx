@@ -6,6 +6,7 @@ import { WaxSeal } from '../components/ui/WaxSeal';
 import { Sparkline } from '../components/ui/Sparkline';
 import { MentorDrawer } from '../components/student/MentorDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
+import { NavBar } from '../components/ui/NavBar';
 
 const TABS = ['Today', 'Me', 'Reviews', 'Internships', 'Predictions'] as const;
 type Tab = typeof TABS[number];
@@ -56,10 +57,44 @@ const StudentHome: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-bg pb-24">
-      {/* Header & Tabs */}
-      <div className="sticky top-0 z-30 bg-bg/90 backdrop-blur border-b border-hairline pt-8 px-6 pb-0 shadow-sm">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="font-ceremonial text-4xl text-ink mb-6">Welcome, {state.name.split(' ')[0]}</h1>
+      <NavBar />
+      
+      <div className="max-w-4xl mx-auto px-6 pt-8">
+        <h1 className="font-ceremonial text-4xl text-ink mb-6">Welcome, {state.name.split(' ')[0]}</h1>
+        
+        {/* Mentor Hero Section: shown above tabs on Today tab */}
+        {activeTab === 'Today' && (
+          <div className="mb-8 p-6 bg-primary-tint border border-primary/20 rounded-lg relative overflow-hidden shadow-sm">
+            <div className="flex gap-4 items-start mb-4">
+              <WaxSeal show={true} size="md" color="brass" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-ceremonial text-2xl font-bold text-primary">Drishta</span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-mono bg-brass/20 text-brass border border-brass/30">AI Mentor</span>
+                </div>
+                <p className="font-mono text-xs text-ink-soft font-semibold">Status: Active & Observing</p>
+              </div>
+            </div>
+            
+            <div className="font-ceremonial text-2xl text-primary-deep mb-6 italic leading-relaxed">
+              "{plan.message || "I am analyzing your current academic rhythm. Let's make sure you stay on track today."}"
+            </div>
+
+            <div className="bg-bg border border-hairline p-4 rounded shadow-sm">
+              <h4 className="font-mono text-xs uppercase tracking-widest text-ink-soft mb-2 flex justify-between items-center">
+                <span>Here's what I'm seeing:</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono font-bold text-white bg-risk-${state.riskBand}`}
+                      style={{ backgroundColor: `var(--color-risk-${state.riskBand})` }}>
+                  {state.riskBand} Risk ({state.riskScore || 35})
+                </span>
+              </h4>
+              <p className="font-body text-sm text-ink">{state.whyCopy || "Academic rhythm analysis updated."}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs Bar */}
+        <div className="sticky top-0 z-30 bg-bg/90 backdrop-blur border-b border-hairline pt-2 pb-0 mb-6">
           <div className="flex space-x-6 overflow-x-auto no-scrollbar">
             {TABS.map(tab => (
               <button
@@ -122,42 +157,58 @@ const TodayTab = ({ plan }: { plan: StudentPlan }) => {
   }
 
   return (
-    <div className="space-y-6">
-      {plan.interventions.map(int => (
-        <Plate key={int.id} className="p-4 bg-primary-tint border-primary/20 flex gap-4">
-          <div className="w-1 bg-primary rounded-full shrink-0" />
-          <div>
-            <h3 className="font-ceremonial text-xl text-primary-deep">{int.title}</h3>
-            <p className="font-body text-ink mt-1">{int.description}</p>
-          </div>
-        </Plate>
-      ))}
-
-      <h2 className="font-ceremonial text-2xl uppercase tracking-widest text-brass mt-8 mb-4">Missions</h2>
-      <div className="space-y-3">
-        {tasks.map(task => (
-          <Plate key={task.id} className="p-4 flex items-center justify-between group">
-            <div className={`transition-all duration-500 ${task.completed ? 'opacity-60 grayscale' : ''}`}>
-              <h4 className={`font-display text-lg ${task.completed ? 'line-through decoration-brass' : ''}`}>{task.title}</h4>
-              <span className="text-xs font-mono text-ink-soft bg-surface px-2 py-0.5 rounded border border-hairline mt-2 inline-block">
-                Why: Customized study task
-              </span>
-            </div>
-            
-            <button 
-              onClick={() => handleComplete(task.id)}
-              disabled={task.completed}
-              className="relative w-12 h-12 flex items-center justify-center"
-            >
-              {task.completed ? (
-                <WaxSeal show={true} size="md" color="brass" />
-              ) : (
-                <div className="w-6 h-6 rounded-full border-2 border-brass group-hover:bg-brass/10 transition-colors" />
-              )}
-            </button>
-          </Plate>
-        ))}
+    <div className="space-y-8">
+      {/* Your plan today, from me */}
+      <div>
+        <h2 className="font-ceremonial text-2xl uppercase tracking-widest text-brass mb-4">Your plan today, from me:</h2>
+        <div className="space-y-3">
+          {tasks.map(task => (
+            <Plate key={task.id} className="p-4 flex items-center justify-between group">
+              <div className={`transition-all duration-500 ${task.completed ? 'opacity-60 grayscale' : ''}`}>
+                <h4 className={`font-display text-lg ${task.completed ? 'line-through decoration-brass' : ''}`}>{task.title}</h4>
+                <span className="text-xs font-mono text-ink-soft bg-surface px-2 py-0.5 rounded border border-hairline mt-2 inline-block">
+                  Why: Customized study task for learning path
+                </span>
+              </div>
+              
+              <button 
+                onClick={() => handleComplete(task.id)}
+                disabled={task.completed}
+                className="relative w-12 h-12 flex items-center justify-center"
+              >
+                {task.completed ? (
+                  <WaxSeal show={true} size="md" color="brass" />
+                ) : (
+                  <div className="w-6 h-6 rounded-full border-2 border-brass group-hover:bg-brass/10 transition-colors" />
+                )}
+              </button>
+            </Plate>
+          ))}
+        </div>
       </div>
+
+      {/* What I've done for you */}
+      {plan.interventions.length > 0 && (
+        <div>
+          <h2 className="font-ceremonial text-2xl uppercase tracking-widest text-brass mb-4">What I've done for you:</h2>
+          <div className="space-y-4">
+            {plan.interventions.map(int => (
+              <Plate key={int.id} className="p-6 bg-surface border border-hairline flex gap-4 items-start relative animate-fade-in">
+                <div className="w-1 bg-brass h-12 rounded shrink-0" />
+                <div className="flex-1">
+                  <div className="flex justify-between items-start gap-4 mb-2">
+                    <h3 className="font-display text-lg font-bold">{int.title}</h3>
+                    <span className={`px-2 py-0.5 text-[10px] uppercase font-mono rounded text-white ${int.status === 'auto_sent' ? 'bg-primary' : 'bg-brass'}`}>
+                      {int.status === 'auto_sent' ? 'auto' : 'pending'}
+                    </span>
+                  </div>
+                  <p className="font-body text-sm text-ink-soft italic">"{int.description}"</p>
+                </div>
+              </Plate>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

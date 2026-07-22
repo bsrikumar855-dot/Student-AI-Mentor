@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { api, type StudentSummary, type Intervention, type IngestJob, type RiskBand } from '../lib/api';
 import { Plate } from '../components/ui/Plates';
 import { motion, AnimatePresence } from 'framer-motion';
+import { NavBar } from '../components/ui/NavBar';
 
 const TABS = ['Cohort', 'Pending Reviews'] as const;
 type Tab = typeof TABS[number];
@@ -77,6 +78,7 @@ const FacultyConsole: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-surface flex flex-col pb-12">
+      <NavBar />
       <div className="bg-bg border-b border-hairline px-8 py-6">
         <div className="max-w-6xl mx-auto flex justify-between items-end">
           <div>

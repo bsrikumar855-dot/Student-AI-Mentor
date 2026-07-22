@@ -36,7 +36,7 @@ const Onboarding: React.FC = () => {
       <div className="w-full max-w-lg">
         <h1 className="font-ceremonial text-4xl mb-2 text-ink">Data & Mentorship Consent</h1>
         <p className="font-body text-ink-soft mb-8">
-          The Ivy Heritage platform uses your academic data to provide personalized mentorship and risk assessment. Please configure your preferences below.
+          The Drishta platform uses your academic data to provide personalized mentorship and risk assessment. Please configure your preferences below.
         </p>
 
         <Plate className="p-8 mb-8">

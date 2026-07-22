@@ -61,6 +61,7 @@ export interface StudentPlan {
   tasks: Task[];
   interventions: Intervention[];
   freshness?: string; // faculty-only
+  message?: string;
 }
 
 export interface ReviewTopic {
@@ -118,7 +119,7 @@ const mockState: Record<Role, StudentState> = {
   student: {
     id: 'STU_HERO',
     name: 'Aisha',
-    motto: 'Constantia et Labore',
+    motto: 'Sees the student. Shows the reason.',
     riskBand: 'medium',
     riskScore: 35,
     components: [
@@ -134,7 +135,7 @@ const mockState: Record<Role, StudentState> = {
   faculty: {
     id: 'STU_HERO',
     name: 'Aisha',
-    motto: 'Constantia et Labore',
+    motto: 'Sees the student. Shows the reason.',
     riskBand: 'medium',
     riskScore: 35,
     components: [
@@ -273,7 +274,7 @@ export const api = {
       return {
         id: s.student_id,
         name: s.name,
-        motto: "Constantia et Labore",
+        motto: "Sees the student. Shows the reason.",
         riskBand: level,
         riskScore: s.risk?.score,
         components: components,
@@ -313,7 +314,8 @@ export const api = {
       return {
         tasks,
         interventions,
-        freshness: p.generated_at ? `Generated at ${new Date(p.generated_at).toLocaleTimeString()}` : 'Just now'
+        freshness: p.generated_at ? `Generated at ${new Date(p.generated_at).toLocaleTimeString()}` : 'Just now',
+        message: p.message
       };
     } catch (e) {
       console.warn("getPlan failed, returning mock:", e);

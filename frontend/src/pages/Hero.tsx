@@ -32,7 +32,7 @@ const Hero: React.FC = () => {
         <div className="mb-12">
           <LivingCrest
             riskBand="medium"
-            motto="Constantia et Labore"
+            motto="Sees the student. Shows the reason."
             components={[
               { id: '1', label: '', value: 100, risk: 'low' },
               { id: '2', label: '', value: 100, risk: 'low' },
@@ -43,9 +43,9 @@ const Hero: React.FC = () => {
           />
         </div>
 
-        <h1 className="font-ceremonial text-5xl md:text-7xl mb-4 text-center tracking-tight">The Ivy Heritage</h1>
+        <h1 className="font-ceremonial text-5xl md:text-7xl mb-4 text-center tracking-tight">Drishta</h1>
         <p className="font-body text-primary-tint mb-12 text-center max-w-md opacity-80">
-          A distinctive collegiate platform for academic risk and mentorship.
+          Sees the student. Shows the reason.
         </p>
 
         <Plate className="p-8 w-full bg-surface text-ink relative">

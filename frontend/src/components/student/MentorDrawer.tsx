@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, type ChatMessage } from '../../lib/api';
-import { WaxSeal } from '../ui/WaxSeal';
 import { cn } from '../../lib/utils';
 import { Send } from 'lucide-react';
 
@@ -47,11 +46,10 @@ export const MentorDrawer: React.FC<MentorDrawerProps> = ({ studentId }) => {
       {/* Floating Action Button */}
       <button 
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 transition-transform hover:scale-105 active:scale-95"
-        aria-label="Open Mentor Chat"
+        className="fixed bottom-6 right-6 z-40 transition-transform hover:scale-105 active:scale-95 flex items-center gap-2 bg-primary-deep text-surface px-4 py-2 rounded-full border border-brass shadow-lg"
+        aria-label="Ask Drishta"
       >
-        <WaxSeal show={true} color="primary" size="lg" />
-        <span className="absolute inset-0 flex items-center justify-center font-ceremonial text-surface text-2xl font-bold">M</span>
+        <span className="font-ceremonial font-bold">Ask Drishta</span>
       </button>
 
       {/* Unrolling Letter Drawer */}
@@ -73,7 +71,7 @@ export const MentorDrawer: React.FC<MentorDrawerProps> = ({ studentId }) => {
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="bg-primary-deep text-surface p-4 flex justify-between items-center relative">
-                <h3 className="font-ceremonial text-2xl">The Mentor</h3>
+                <h3 className="font-ceremonial text-2xl">Ask Drishta</h3>
                 <button onClick={() => setIsOpen(false)} className="text-surface/70 hover:text-surface">
                   Close
                 </button>
@@ -123,7 +121,7 @@ export const MentorDrawer: React.FC<MentorDrawerProps> = ({ studentId }) => {
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask your mentor..."
+                    placeholder="Ask Drishta..."
                     className="flex-1 bg-transparent border-b border-hairline focus:border-brass py-2 font-body outline-none text-ink"
                   />
                   <button type="submit" disabled={!input.trim()} className="text-primary disabled:opacity-50 p-2">
