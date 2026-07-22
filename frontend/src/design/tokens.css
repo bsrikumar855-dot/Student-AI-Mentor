@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+
+  /* Core - cream / orange / slate */
+  --color-ink:            var(--ink);
+  --color-bg:             var(--bg);
+  --color-surface:        var(--surface);
+  --color-surface-2:      var(--surface-2);
+  --color-line:           var(--line);
+  --color-text:           var(--text);
+  --color-text-dim:       var(--text-dim);
+  
+  --color-decide:         var(--decide);
+  --color-decide-lo:      var(--decide-lo);
+  --color-guard:          var(--guard);
+  --color-guard-lo:       var(--guard-lo);
+  --color-speak:          var(--speak);
+  --color-speak-lo:       var(--speak-lo);
+}
+
+:root {
+  /* Core */
+  --bg:             #fdfaf6;
+  --surface:        #ffffff;
+  --surface-2:      #faf8f5;
+  --line:           #e7e5e2;
+  --ink:            #1a1918;
+  --text:           #3d3b38;
+  --text-dim:       #7b746c;
+
+  /* Action/Semantic */
+  --decide:         #e47c4c; /* orange */
+  --decide-lo:      #faeedf;
+  
+  --guard:          #6b8a63; /* soft olive */
+  --guard-lo:       #f3f7f2;
+  
+  --speak:          #d89947; /* ochre/gold */
+  --speak-lo:       #fdf5ea;
+
+  --focus-ring:     var(--decide);
+}
+
+[data-theme="dark"] {
+  --bg:             #1a1918; /* Dark brown/charcoal */
+  --surface:        #232120;
+  --surface-2:      #2b2826;
+  --line:           #3d3b38;
+  --ink:            #fdfaf6;
+  --text:           #e7e5e2;
+  --text-dim:       #a9a29a;
+
+  --decide:         #e47c4c;
+  --decide-lo:      #4a2a1a;
+  
+  --guard:          #85a97d;
+  --guard-lo:       #2a3b26;
+  
+  --speak:          #d89947; 
+  --speak-lo:       #4d3719;
+}
+
+/* ── Base body ───────────────────────────────────────────────────────────── */
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+/* ── Smooth theme transitions ────────────────────────────────────────────── */
+body, div, aside, header, main, nav, section, article,
+h1, h2, h3, h4, h5, h6, p, span, button, input, textarea,
+select, table, th, td, tr {
+  transition: background-color 220ms ease, border-color 220ms ease,
+              color 200ms ease, box-shadow 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body, div, aside, header, main, nav, section, article,
+  h1, h2, h3, h4, h5, h6, p, span, button, input, textarea,
+  select, table, th, td, tr {
+    transition: none !important;
+  }
+}
+
+/* ── Focus ───────────────────────────────────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
