@@ -35,7 +35,19 @@ def generate_plan_for_student(student: StudentState) -> Plan:
     risk_state = calculate_risk(student)
     student.risk = risk_state
     student.predictions = predict_trends(student)
-    active_interventions = evaluate_interventions(student, risk_state)
+
+    # Build coding profile dict {handle: profile} for any registered handles.
+    # get_codeforces falls back to seed/cache when offline — never raises.
+    coding_profile: Optional[Dict[str, Any]] = None
+    handles = student.coding_handles or {}
+    if handles:
+        coding_profile = {}
+        for platform, handle in handles.items():
+            coding_profile[handle] = get_codeforces(handle)
+
+    active_interventions = evaluate_interventions(
+        student, risk_state, coding_profile=coding_profile
+    )
     plan = build_plan(student, risk_state, active_interventions)
     plan.message = phrase_intervention_message(student, plan)
     return plan

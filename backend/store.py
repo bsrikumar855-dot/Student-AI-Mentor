@@ -7,6 +7,7 @@ import json
 import os
 from typing import Dict, Optional, List, Any
 from backend.models import StudentState, Plan
+import backend.coding as _coding_module
 
 class InMemoryStore:
     """
@@ -37,13 +38,15 @@ class InMemoryStore:
 
     def dump_json(self, path: str) -> None:
         """
-        Serializes students, plans, and the audit log to a single JSON file at `path`,
-        writing atomically (tmp file + os.replace) so a crash mid-write can't corrupt it.
+        Serializes students, plans, audit log, and the coding cache to a single JSON
+        file at `path`, writing atomically (tmp file + os.replace) so a crash
+        mid-write can't corrupt it.
         """
         data = {
             "students": {sid: s.model_dump(mode="json") for sid, s in self._students.items()},
             "plans": {sid: p.model_dump(mode="json") for sid, p in self._plans.items()},
             "audit_log": self.audit_log,
+            "coding_cache": dict(_coding_module._cache),
         }
         tmp_path = path + ".tmp"
         with open(tmp_path, "w") as f:
@@ -52,9 +55,9 @@ class InMemoryStore:
 
     def load_json(self, path: str) -> None:
         """
-        Rehydrates students, plans, and the audit log from `path`. A missing file is a
-        no-op. A corrupt/unparseable/wrong-shape file does not raise and leaves any
-        existing in-memory state untouched (load is all-or-nothing).
+        Rehydrates students, plans, audit log, and coding cache from `path`. A missing
+        file is a no-op. A corrupt/unparseable/wrong-shape file does not raise and
+        leaves any existing in-memory state untouched (load is all-or-nothing).
         """
         if not os.path.exists(path):
             return
@@ -70,3 +73,10 @@ class InMemoryStore:
         self._students = students
         self._plans = plans
         self.audit_log = audit_log
+        # Restore coding cache if present (missing key is not an error)
+        try:
+            coding_cache = data.get("coding_cache", {})
+            if isinstance(coding_cache, dict):
+                _coding_module._cache.update(coding_cache)
+        except Exception:
+            pass

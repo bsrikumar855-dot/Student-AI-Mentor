@@ -68,6 +68,13 @@ def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]
             else:
                 skills = [str(skills_raw).strip()]
 
+            # Optional codeforces_handle column -> coding_handles dict
+            cf_handle_raw = row.get("codeforces_handle", None)
+            if cf_handle_raw is not None and not pd.isna(cf_handle_raw) and str(cf_handle_raw).strip():
+                coding_handles = {"codeforces": str(cf_handle_raw).strip()}
+            else:
+                coding_handles = {}
+
             name = str(_required(row, "name"))
             cgpa = float(_required(row, "cgpa"))
             attendance = float(_required(row, "attendance"))
@@ -173,6 +180,7 @@ def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]
                 goals_met_streak=goals_met_streak,
                 topics=topics,
                 skills=skills,
+                coding_handles=coding_handles,
                 risk=None,
                 predictions=None
             ))

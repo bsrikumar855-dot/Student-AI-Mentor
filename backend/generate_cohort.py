@@ -25,7 +25,8 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         "days_since_commit": 11,
         "days_since_linkedin": 20,
         "goals_met_streak": 0,
-        "skills": "python,git,sql"
+        "skills": "python,git,sql",
+        "codeforces_handle": "aisha_cf",
     })
     
     # High-risk students: distinct names and slightly varied inputs so scores differ
