@@ -322,13 +322,13 @@ def test_risk_golden_file_behavior():
     res = calculate_risk(student)
 
     # Per SPEC Section 2: score = round(score01 * 100) (int), bands Low<33/Medium<66/High>=66
-    assert res.score == 17
+    assert res.score == 18
     assert res.level == "Low"
     assert res.components.score_gap == pytest.approx(0.06666, abs=1e-4)
     assert res.components.syllabus_behind == pytest.approx(0.28, abs=1e-2)
     assert res.components.activity_recency == pytest.approx(0.2857, abs=1e-4)
     assert res.components.trend == pytest.approx(0.1285, abs=1e-4)
-    assert "Low — Syllabus completion is low (60.0%) for Data Structures exam in 10 days." in res.reasons
+    assert "Low — Student has been inactive for 2 days." in res.reasons
 
     # Assert new explanation field validates and components sum roughly to the score
     assert res.explanation is not None

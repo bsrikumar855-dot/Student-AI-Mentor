@@ -2,18 +2,18 @@
 Risk Scoring Module: Compute a deterministic risk score using weighted factors like attendance, grade trends, and activity.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 from backend.models import StudentState, RiskResult, RiskComponents
 
 # SPEC Section 2: fixed weights and target for risk scoring.
 # Banding: High if score>=45, Medium if score>=25, else Low.
 WEIGHTS = {
-    "score_gap": 0.35,
-    "syllabus_behind": 0.24,
-    "activity_recency": 0.22,
-    "trend": 0.14,
-    "coding_activity": 0.05,
+    "score_gap": 0.34,
+    "syllabus_behind": 0.25,
+    "activity_recency": 0.25,
+    "trend": 0.15,
+    "coding_activity": 0.01,
 }
 TARGET = 60.0
 

@@ -55,7 +55,7 @@ def test_generate_plan_golden_pipeline():
     # Assert deterministic outputs match expected values
     assert student.risk is not None
     assert student.risk.level == "Medium"
-    assert student.risk.score == 39
+    assert student.risk.score == 42
 
     assert student.predictions is not None
     assert student.predictions.exam_trend == "declining"  # Math has slope -10, Physics has slope 0 -> mean slope = -5
