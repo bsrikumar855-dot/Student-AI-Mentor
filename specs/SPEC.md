@@ -1,4 +1,4 @@
-# Polaris Project Specification
+# Polaris Project Specification (Phase 2)
 
 Polaris is a proactive AI student mentor designed to ingest LMS data, score academic risk, plan daily study schedules, track progress, and intervene when a student drifts. It runs a deterministic decision core with a separate natural language layer.
 
@@ -19,51 +19,60 @@ Polaris is a proactive AI student mentor designed to ingest LMS data, score acad
 - **Inputs**: Excel file (`cohort.xlsx` or uploaded file stream).
 - **Outputs**: Dictionary/Pydantic representation of `StudentState`.
 - **Acceptance Criteria**: Properly parses tables, handles missing columns gracefully, converts dates to ISO format, and validates structure.
+- **Workbook Sheets**:
+  - `students(student_id,name,cgpa,attendance,days_since_active,days_since_commit,days_since_linkedin,goals_met_streak,skills[comma-sep])`
+  - `scores(student_id,subject,test_no,score)` (long format)
+  - `exams(student_id,subject,date,days_to_exam,completion)`
+  - `topics(student_id,topic,learned_on,ef,reps,interval,next_review)`
 
 ### 2. Risk Scoring Module (`risk.py`)
-- **Intent**: Compute a deterministic risk score using weighted factors like attendance, grade trends, and activity.
-- **Inputs**: `StudentState`.
-- **Outputs**: `RiskState` object containing risk score (0-100), level (Low, Medium, High), and list of triggering factors.
-- **Acceptance Criteria**: Repeatable mathematical scoring with zero external calls. Score increases as attendance drops or grade trend becomes negative.
+- **Formula**:
+  - `TARGET = 60`
+  - `score_gap = mean over subjects of max(0, (TARGET - latest) / TARGET)`
+  - `syllabus_behind = nearest_exam ? (1 - completion) * min(7 / max(days_to_exam, 1), 1) : 0`
+  - `activity_recency = min(days_since_active / 7, 1)`
+  - `trend = mean over subjects (len >= 2, trend[0] > 0) of max(0, (trend[0] - trend[-1]) / trend[0])`
+  - `WEIGHTS = score_gap: 0.35, syllabus_behind: 0.25, activity_recency: 0.25, trend: 0.15`
+  - `score01 = Σ weight * term`
+  - `score = round(score01 * 100)`
+  - `level = Low (<33) / Medium (<66) / High (>=66)`
+  - `dominant = name of term with the highest weight * term value`
+  - `reason = "{level} — {human detail for the dominant term, citing real data}"`
+- **Output**: `RiskState` containing `{score, level, dominant, reason, contributions: {term: val}}`
 
 ### 3. Prediction Module (`predict.py`)
-- **Intent**: Project GPA trends and exam readiness based on historical scores and completion progress.
-- **Inputs**: `StudentState`.
-- **Outputs**: Projected GPA and exam completion trends.
-- **Acceptance Criteria**: Calculates projected grade trends using regression or simple moving averages.
+- **Formula**:
+  - `slope = (trend[-1] - trend[0]) / (len - 1)` (if len >= 2, else 0)
+  - `projected_exam = clamp(latest + slope * (days_to_exam / 7), 0, 100)`
+  - `projected_gpa = mean(projected_exam / 10) over subjects` (10-point scale)
+  - `fail_risk = High (<40) / Medium (<55) / Low (>=55)`
+- **Output**: `{projected_gpa, current_cgpa, gpa_direction, subjects: [{subject, current, projected, direction, fail_risk, why}]}`
 
-### 4. Interventions Module (`interventions.py`)
-- **Intent**: Trigger specific actions (e.g., peer tutoring, faculty alerts) based on deterministic threshold violations.
-- **Inputs**: `StudentState`, current risk evaluation.
-- **Outputs**: List of active/triggered interventions.
-- **Acceptance Criteria**: Evaluates rules (e.g., risk > 70 triggers immediate faculty intervention; attendance < 75% triggers alert).
+### 4. Spaced Repetition Module (`retain.py`)
+- **SM-2 Algorithm**:
+  - `if quality < 3: reps = 0, interval = 1`
+  - `else: reps += 1; interval = 1 if reps == 1 else 6 if reps == 2 else round(interval * ef)`
+  - `ef = max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))`
+  - `next_review = today + interval days`
+- **Recall Estimate**:
+  - `recall = exp(-days_since_learned / (max(interval, 1) * 1.4))`
+- **Due Topics**:
+  - Find topics where `next_review <= today OR recall < 0.6`, sorted weakest-recall first.
 
-### 5. Spaced Repetition Module (`retain.py`)
-- **Intent**: Run SM-2 spacing algorithm to calculate next review times for student learning topics.
-- **Inputs**: `TopicMemory` state, student response quality (0-5).
-- **Outputs**: Updated `TopicMemory` state.
-- **Acceptance Criteria**: Correctly computes new ease factor, repetition count, and interval according to SM-2 formula.
+### 5. Internships Module (`internships.py`)
+- **Fit Scoring**: Match student skills and readiness against curated internship vacancies in `internships.json`. Fit is calculated based on skill overlap and satisfying the minimum CGPA requirement (10-point scale).
 
-### 6. Internships Module (`internships.py`)
-- **Intent**: Match student skills and readiness against curated internship vacancies.
-- **Inputs**: Student skills list, CGPA, `internships.json` data.
-- **Outputs**: Sorted list of matching internship positions with a calculated fit score.
-- **Acceptance Criteria**: Deterministic scoring based on matching skills and meeting minimum CGPA requirements.
+### 6. Interventions Module (`interventions.py`)
+Trigger specific actions based on deterministic threshold violations:
+- `recovery_plan`: `days_since_active >= 5`, kind: `academic`, auto: `true`
+- `revision_timetable`: `nearest_exam.days_to_exam <= 7` and `completion < 0.5`, kind: `academic`, auto: `true`
+- `weak_topic`: any subject `trend[-1] < trend[-2]`, kind: `academic`, auto: `true`
+- `revision_mission`: for each `retain.due_topics(state)`, kind: `revision`, auto: `true`
+- `ramp_difficulty`: `goals_met_streak >= 7`, kind: `academic`, auto: `true`
+- `git_nudge`: `days_since_commit >= 10`, kind: `career`, auto: `true`
+- `linkedin_nudge`: `days_since_linkedin >= 14`, kind: `career`, auto: `true`
+- `internship_match`: internships matching any "ready" status, kind: `career`, auto: `true`
+- `flag_at_risk`: `risk.level == 'High'`, kind: `academic`, auto: `false`
 
 ### 7. Language Layer (`language.py`)
-- **Intent**: Rephrase risk explanations, messages, and chat interactions.
-- **Inputs**: `StudentState`, `Plan`, prompt text.
-- **Outputs**: Formatted/personalized string message.
-- **Acceptance Criteria**: Uses LLM SDK when configured with keys; degrades to a deterministic template fallback when keys are absent.
-
-### 8. Data Store Module (`store.py`)
-- **Intent**: In-memory storage for active student states, tasks, and completion streaks.
-- **Inputs**: CRUD operations on student states.
-- **Outputs**: Retrieved student records and plans.
-- **Acceptance Criteria**: Fast retrieval, optional persistence via JSON dump.
-
-### 9. Cohort Generation (`generate_cohort.py`)
-- **Intent**: Produce synthetic cohort Excel data for testing the ingestion module.
-- **Inputs**: Parameters for number of students, random seed.
-- **Outputs**: Excel file (`cohort.xlsx`) containing grade logs, attendance, and activity records.
-- **Acceptance Criteria**: Output file must be valid openpyxl/pandas spreadsheet conforming to expected input structure.
+Isolated LLM SDK calling + python fallback template when API key is missing.

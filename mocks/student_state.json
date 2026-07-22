@@ -1,7 +1,7 @@
 {
   "student_id": "STU1001",
   "name": "Alice Smith",
-  "cgpa": 3.4,
+  "cgpa": 7.8,
   "attendance": 0.85,
   "subjects": [
     {
