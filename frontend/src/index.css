@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #F9F8F6;
+  --color-surface: #F3F0EA;
+  --color-primary: #2C4C3B;
+  --color-brass: #B89768;
+  --color-ink: #1C1E1D;
+  
+  --color-primary-deep: #1F3A2C;
+  --color-primary-tint: #E7ECE7;
+  --color-brass-bright: #CBA97C;
+  --color-ink-soft: #4A4E4B;
+  --color-hairline: #DAD5C9;
+  --color-parchment-edge: #EDE7D9;
+  
+  --color-risk-low: #2C4C3B;
+  --color-risk-medium: #B89768;
+  --color-risk-high: #7A3B34;
+  --color-risk-crit: #5A2622;
+
+  --font-display: "Fraunces", serif;
+  --font-ceremonial: "Cormorant Garamond", serif;
+  --font-body: "Hanken Grotesk", sans-serif;
+  --font-mono: "Spline Sans Mono", monospace;
+}
+
+@layer base {
+  :root {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+  }
+  
+  /* visible keyboard focus rings in brass */
+  *:focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .foil-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .foil-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(203, 169, 124, 0.4), /* brass-bright */
+      transparent
+    );
+    transform: skewX(-20deg);
+    transition: none;
+  }
+  .foil-shimmer:hover::after {
+    left: 200%;
+    transition: left 2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .engraved-text {
+    color: var(--color-ink);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  
+  .pressed-plate {
+    box-shadow: inset 0 2px 4px var(--color-parchment-edge);
+  }
+  
+  .lift-shadow {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .lift-shadow:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+  }
+}
