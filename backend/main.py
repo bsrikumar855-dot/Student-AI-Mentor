@@ -343,5 +343,56 @@ async def chat_endpoint(payload: ChatRequest):
     reply, used_llm = chat_response(payload.message, payload.history)
     return {"reply": reply, "used_llm": used_llm}
 
+@router.post("/demo/drift-hero")
+async def demo_drift_hero():
+    student = store.get_student("STU_HERO")
+    if not student:
+        raise HTTPException(status_code=404, detail="Student STU_HERO not found.")
+    
+    student.days_since_active = 8
+    if student.nearest_exam:
+        student.nearest_exam.days_to_exam = 5
+        student.nearest_exam.completion = 0.45
+    if student.exams:
+        student.exams[0].days_to_exam = 5
+        
+    # We must run collection as well so derived signals exist!
+    from backend.collector import run_collection
+    run_collection(store)
+    
+    plan = generate_plan_for_student(student)
+    store.save_student(student)
+    store.save_plan("STU_HERO", plan)
+    store.dump_json()
+    return {"success": True}
+
+@router.post("/demo/reset")
+async def demo_reset():
+    # Reset store
+    store.students = {}
+    store.plans = {}
+    store.derived_signals = {}
+    
+    # Re-ingest
+    cohort_path = os.path.join(os.path.dirname(__file__), "data", "cohort.xlsx")
+    if not os.path.exists(cohort_path):
+        cohort_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend", "data", "cohort.xlsx")
+        
+    with open(cohort_path, "rb") as f:
+        from backend.ingest import ingest_excel
+        students, _ = ingest_excel(f)
+        
+    for student in students:
+        store.save_student(student)
+        
+    from backend.collector import run_collection
+    run_collection(store)
+    
+    for student in students:
+        plan = generate_plan_for_student(student)
+        store.save_plan(student.student_id, plan)
+        
+    store.dump_json()
+    return {"success": True}
 
 app.include_router(router)

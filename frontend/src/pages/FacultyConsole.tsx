@@ -33,12 +33,23 @@ const FacultyConsole: React.FC = () => {
             </div>
           </div>
           
-          <button 
-            onClick={() => setIsIngesting(true)}
-            className="mb-3 px-4 py-2 bg-brass text-ink font-mono uppercase text-sm tracking-widest rounded-sm hover:opacity-90 transition-opacity foil-shimmer"
-          >
-            Run Ingest
-          </button>
+          <div className="flex gap-4">
+            <button 
+              onClick={async () => {
+                await api.driftHero();
+                window.dispatchEvent(new Event('api-refresh'));
+              }}
+              className="mb-3 px-4 py-2 bg-red-800 text-white font-mono uppercase text-sm tracking-widest rounded-sm hover:opacity-90 transition-opacity"
+            >
+              Simulate Drift
+            </button>
+            <button 
+              onClick={() => setIsIngesting(true)}
+              className="mb-3 px-4 py-2 bg-brass text-ink font-mono uppercase text-sm tracking-widest rounded-sm hover:opacity-90 transition-opacity foil-shimmer"
+            >
+              Run Ingest
+            </button>
+          </div>
         </div>
       </div>
 
@@ -70,8 +81,14 @@ const CohortTab = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
+  const fetchStudents = () => {
     api.getStudents('all').then(setStudents);
+  };
+
+  useEffect(() => {
+    fetchStudents();
+    window.addEventListener('api-refresh', fetchStudents);
+    return () => window.removeEventListener('api-refresh', fetchStudents);
   }, []);
 
   return (

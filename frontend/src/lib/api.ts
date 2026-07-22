@@ -158,6 +158,8 @@ let chatThread: ChatMessage[] = [
 
 // --- API Client ---
 
+const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+
 const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const api = {
@@ -179,13 +181,89 @@ export const api = {
   },
 
   // State & Plan
-  getState: async (_studentId: string): Promise<StudentState> => {
-    await delay();
-    return mockState[currentRole];
+  getState: async (studentId: string): Promise<StudentState> => {
+    try {
+      const resp = await fetch(`${BASE}/students/${studentId}/state`);
+      if (!resp.ok) throw new Error("CORS or network error");
+      const s = await resp.json();
+      
+      const level = (s.risk?.level || "low").toLowerCase() as RiskBand;
+      const contributions = s.risk?.explanation?.contributions || [];
+      
+      const componentLabels: Record<string, string> = {
+        score_gap: "Coursework Gap",
+        syllabus_behind: "Syllabus Behind",
+        activity_recency: "Activity Recency",
+        trend: "Grade Trend",
+        coding_activity: "Coding Activity"
+      };
+
+      const components = contributions.map((c: any, idx: number) => {
+        const valPct = Math.round(c.value * 100);
+        let band: RiskBand = 'low';
+        if (c.value >= 0.5) band = 'high';
+        else if (c.value >= 0.25) band = 'medium';
+        return {
+          id: `c_${idx}`,
+          label: componentLabels[c.name] || c.name,
+          value: valPct,
+          risk: band
+        };
+      });
+
+      return {
+        id: s.student_id,
+        name: s.name,
+        motto: "Constantia et Labore",
+        riskBand: level,
+        components: components,
+        kindTag: "Supportive",
+        whyCopy: s.risk?.explanation?.summary || "Let's steady it together."
+      };
+    } catch (e) {
+      console.warn("getState failed, using mock:", e);
+      return mockState[currentRole];
+    }
   },
-  getPlan: async (_studentId: string): Promise<StudentPlan> => {
-    await delay();
-    return mockPlan[currentRole];
+  getPlan: async (studentId: string): Promise<StudentPlan> => {
+    try {
+      const resp = await fetch(`${BASE}/students/${studentId}/plan`);
+      if (!resp.ok) throw new Error("CORS or network error");
+      const p = await resp.json();
+      
+      const tasks = (p.daily_targets || []).map((t: any) => {
+        let type: 'mission' | 'review' | 'other' = 'other';
+        if (t.kind === 'review') type = 'review';
+        else if (t.kind === 'recovery' || t.kind === 'practice' || t.kind === 'academic') type = 'mission';
+        return {
+          id: t.id,
+          title: t.task,
+          completed: t.done,
+          type: type
+        };
+      });
+
+      const interventions = (p.interventions || []).map((i: any) => {
+        return {
+          id: i.id,
+          studentId: studentId,
+          studentName: "Student",
+          title: i.action,
+          description: i.why,
+          status: i.auto ? 'auto_sent' : (i.reviewed ? 'approved' : 'pending'),
+          date: new Date().toISOString().split('T')[0]
+        };
+      });
+
+      return {
+        tasks,
+        interventions,
+        freshness: p.generated_at ? `Generated at ${p.generated_at}` : 'Just now'
+      };
+    } catch (e) {
+      console.warn("getPlan failed, using mock:", e);
+      return mockPlan[currentRole];
+    }
   },
   generatePlan: async (_studentId: string) => {
     await delay(1200);
@@ -241,26 +319,68 @@ export const api = {
     await delay(400);
     return chatThread;
   },
-  sendChatMessage: async (_studentId: string, message: string) => {
-    await delay(800); // simulate typing
-    const newMsg: ChatMessage = { id: `m${Date.now()}`, role: 'user', content: message, timestamp: new Date().toISOString() };
-    chatThread.push(newMsg);
-    
-    // Auto-reply
-    const reply: ChatMessage = { id: `m${Date.now()+1}`, role: 'mentor', content: 'I hear you. Let us break that down into smaller steps.', timestamp: new Date().toISOString() };
-    chatThread.push(reply);
-    
-    return { success: true, messages: [newMsg, reply] };
+  sendChatMessage: async (studentId: string, message: string) => {
+    try {
+      const history = chatThread.map(m => ({
+        role: m.role === 'mentor' ? 'assistant' : 'user',
+        content: m.content
+      }));
+
+      const newMsg: ChatMessage = { id: `m_${Date.now()}`, role: 'user', content: message, timestamp: new Date().toISOString() };
+      chatThread.push(newMsg);
+
+      const resp = await fetch(`${BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: studentId,
+          message: message,
+          history: history
+        })
+      });
+      if (!resp.ok) throw new Error("CORS or network error");
+      const data = await resp.json();
+      
+      const replyMsg: ChatMessage = {
+        id: `m_${Date.now() + 1}`,
+        role: 'mentor',
+        content: data.reply,
+        timestamp: new Date().toISOString()
+      };
+      chatThread.push(replyMsg);
+      
+      return { success: true, messages: [newMsg, replyMsg] };
+    } catch (e) {
+      console.warn("sendChatMessage failed, using mock:", e);
+      const newMsg: ChatMessage = { id: `m${Date.now()}`, role: 'user', content: message, timestamp: new Date().toISOString() };
+      chatThread.push(newMsg);
+      const reply: ChatMessage = { id: `m${Date.now()+1}`, role: 'mentor', content: 'I hear you. Let us break that down into smaller steps.', timestamp: new Date().toISOString() };
+      chatThread.push(reply);
+      return { success: true, messages: [newMsg, reply] };
+    }
   },
 
   // Faculty specific
   getStudents: async (_segment: string): Promise<StudentSummary[]> => {
-    await delay();
-    return [
-      { id: 'stu_123', name: 'Eleanor Vance', riskBand: 'medium', segment: 'sophomore', lastActive: '2h ago' },
-      { id: 'stu_124', name: 'Julian Black', riskBand: 'low', segment: 'sophomore', lastActive: '1d ago' },
-      { id: 'stu_125', name: 'Aria Montgomery', riskBand: 'high', segment: 'freshman', lastActive: '3h ago' },
-    ];
+    try {
+      const resp = await fetch(`${BASE}/students`);
+      if (!resp.ok) throw new Error("CORS or network error");
+      const data = await resp.json();
+      return data.map((s: any) => ({
+        id: s.student_id,
+        name: s.name,
+        riskBand: (s.risk?.level || "low").toLowerCase() as RiskBand,
+        segment: 'sophomore',
+        lastActive: '2h ago'
+      }));
+    } catch (e) {
+      console.warn("getStudents failed, using mock:", e);
+      return [
+        { id: 'stu_123', name: 'Eleanor Vance', riskBand: 'medium', segment: 'sophomore', lastActive: '2h ago' },
+        { id: 'stu_124', name: 'Julian Black', riskBand: 'low', segment: 'sophomore', lastActive: '1d ago' },
+        { id: 'stu_125', name: 'Aria Montgomery', riskBand: 'high', segment: 'freshman', lastActive: '3h ago' },
+      ];
+    }
   },
   getInterventions: async (status: 'pending' | 'auto_sent'): Promise<Intervention[]> => {
     await delay();
@@ -271,9 +391,45 @@ export const api = {
     }
     return [];
   },
-  reviewIntervention: async (_id: string, _action: 'approve' | 'reject', _note?: string) => {
-    await delay(400);
-    return { success: true };
+  reviewIntervention: async (id: string, action: 'approve' | 'reject', note?: string) => {
+    try {
+      const decision = action === 'reject' ? 'override' : 'approve';
+      const resp = await fetch(`${BASE}/interventions/${id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision: decision,
+          note: note || ""
+        })
+      });
+      if (!resp.ok) throw new Error("CORS or network error");
+      return await resp.json();
+    } catch (e) {
+      console.warn("reviewIntervention failed, using mock:", e);
+      return { success: true };
+    }
+  },
+  
+  // Demo endpoints
+  driftHero: async () => {
+    try {
+      const resp = await fetch(`${BASE}/demo/drift-hero`, { method: 'POST' });
+      if (!resp.ok) throw new Error("CORS or network error");
+      return await resp.json();
+    } catch (e) {
+      console.warn("driftHero failed:", e);
+      return { success: false };
+    }
+  },
+  resetDemo: async () => {
+    try {
+      const resp = await fetch(`${BASE}/demo/reset`, { method: 'POST' });
+      if (!resp.ok) throw new Error("CORS or network error");
+      return await resp.json();
+    } catch (e) {
+      console.warn("resetDemo failed:", e);
+      return { success: false };
+    }
   },
   
   // Ingest
@@ -283,8 +439,6 @@ export const api = {
   },
   pollIngest: async (jobId: string): Promise<IngestJob> => {
     await delay(300);
-    // Simulate progression by using a random number or just returning completed after a few calls
-    // For mock, we'll just return completed immediately to simplify UI testing, or we can make it stateful
     return { id: jobId, status: 'completed', processedRows: 250, totalRows: 254, skippedRows: 4 };
   }
 };

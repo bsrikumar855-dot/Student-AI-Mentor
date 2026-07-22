@@ -12,11 +12,17 @@ const FacultyDetailSlideOver: React.FC = () => {
   const [plan, setPlan] = useState<StudentPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  useEffect(() => {
+  const fetchData = () => {
     if (id) {
       api.getState(id).then(setState);
       api.getPlan(id).then(setPlan);
     }
+  };
+
+  useEffect(() => {
+    fetchData();
+    window.addEventListener('api-refresh', fetchData);
+    return () => window.removeEventListener('api-refresh', fetchData);
   }, [id]);
 
   const handleRegenerate = async () => {
