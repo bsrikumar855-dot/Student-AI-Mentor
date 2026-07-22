@@ -238,6 +238,22 @@ def test_match_internships_behavior():
     assert res[0].match == 1.0
     assert "meets all" in res[0].why
 
+def test_match_internships_custom_policy_excludes_partial_match():
+    from backend.models import PolicyConfig
+
+    db = [
+        {"title": "Full Stack Intern", "company": "Co1",
+         "required_skills": ["Python", "Django", "Flask", "SQL"], "min_cgpa": 7.0},
+    ]
+    # 2 of 4 required skills -> match_score == 0.5
+    res_default = match_internships(["python", "django"], 7.5, db)
+    assert len(res_default) == 1
+    assert res_default[0].match == 0.5
+
+    strict_policy = PolicyConfig(version="test", internship_match_min=0.8)
+    res_strict = match_internships(["python", "django"], 7.5, db, policy=strict_policy)
+    assert res_strict == []
+
 def test_language_phrase_fallback():
     from backend.models import StudentState, Plan, Intervention
     student = StudentState(
@@ -639,6 +655,133 @@ def test_coding_nudge_fires_at_seven_days(monkeypatch):
     interventions3 = evaluate_interventions(student, risk_state, derived_signals=None)
     actions3 = [i.action for i in interventions3]
     assert "coding_nudge" not in actions3
+
+    # Active consent link present, platform_links passed explicitly → still fires
+    from backend.platform_links import PlatformLinkStore, synthesize_consent_from_handles
+    platform_links = PlatformLinkStore()
+    synthesize_consent_from_handles(platform_links, student, at=datetime(2026, 7, 20))
+    interventions4 = evaluate_interventions(student, risk_state, derived_signals=derived, platform_links=platform_links)
+    actions4 = [i.action for i in interventions4]
+    assert "coding_nudge" in actions4
+
+
+def test_coding_nudge_stops_after_revocation():
+    """Revoking a student's codeforces consent link stops coding_nudge from firing
+    even though the cached derived_signals data is unchanged (still stale)."""
+    from datetime import datetime
+    from backend.models import Subject, StudentState, RiskResult, RiskComponents
+    from backend.interventions import evaluate_interventions
+    from backend.platform_links import PlatformLinkStore, synthesize_consent_from_handles
+
+    student = StudentState(
+        student_id="STU_REVOKE",
+        name="Revoked Student",
+        cgpa=7.0,
+        attendance=0.8,
+        subjects=[Subject(name="Math", latest=70.0, trend=[70.0, 70.0])],
+        exams=[],
+        nearest_exam=None,
+        days_since_active=1,
+        days_since_commit=1,
+        days_since_linkedin=1,
+        goals_met_streak=0,
+        topics=[],
+        skills=["python"],
+        coding_handles={"codeforces": "lazy_coder"},
+    )
+    risk_state = RiskResult(
+        score=10, level="Low", reasons=["Low risk"],
+        components=RiskComponents(score_gap=0.0, syllabus_behind=0.0, activity_recency=0.0, trend=0.0, coding_activity=0.0),
+        computed_at="2026-07-22T10:00:00Z"
+    )
+    derived = {"coding_activity": {"value": 30, "source": "codeforces"}}
+
+    platform_links = PlatformLinkStore()
+    synthesize_consent_from_handles(platform_links, student, at=datetime(2026, 7, 1))
+
+    # Active: fires
+    before = evaluate_interventions(student, risk_state, derived_signals=derived, platform_links=platform_links)
+    assert "coding_nudge" in [i.action for i in before]
+
+    # Revoke, regenerate: no longer fires, despite unchanged (stale) derived_signals data
+    platform_links.revoke("STU_REVOKE", "codeforces", datetime(2026, 7, 22))
+    after = evaluate_interventions(student, risk_state, derived_signals=derived, platform_links=platform_links)
+    assert "coding_nudge" not in [i.action for i in after]
+
+
+def test_coding_endpoint_no_handle_after_revocation():
+    """GET /students/{id}/coding returns the no-handle response once consent is revoked."""
+    from fastapi.testclient import TestClient
+    from backend.main import app, store, platform_links
+    from backend.models import StudentState
+    from backend.platform_links import synthesize_consent_from_handles
+    from datetime import datetime
+
+    student = StudentState(
+        student_id="STU_COD_REVOKE",
+        name="Coding Endpoint Student",
+        cgpa=7.0,
+        attendance=0.8,
+        subjects=[],
+        exams=[],
+        nearest_exam=None,
+        days_since_active=0,
+        days_since_commit=0,
+        days_since_linkedin=0,
+        goals_met_streak=0,
+        topics=[],
+        skills=[],
+        coding_handles={"codeforces": "some_handle"},
+    )
+    store.save_student(student)
+    synthesize_consent_from_handles(platform_links, student, at=datetime(2026, 7, 1))
+
+    client = TestClient(app)
+    platform_links.revoke("STU_COD_REVOKE", "codeforces", datetime(2026, 7, 22))
+    resp = client.get("/api/v1/students/STU_COD_REVOKE/coding")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["codeforces"] is None
+    assert "No Codeforces handle registered" in body["note"]
+
+
+def test_ingest_writes_one_plan_decision_trace():
+    """Ingesting a student produces exactly one PlanDecisionTrace, decision_type='plan',
+    stamped with config_version='v1'."""
+    import io
+    import pandas as pd
+    from fastapi.testclient import TestClient
+    from backend.main import app, store
+
+    students_df = pd.DataFrame([{
+        "student_id": "STU_TRACE_1",
+        "name": "Trace Student",
+        "cgpa": 8.0,
+        "attendance": 0.9,
+        "days_since_active": 1,
+        "days_since_commit": 2,
+        "days_since_linkedin": 3,
+        "goals_met_streak": 5,
+        "skills": "python"
+    }])
+
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine="openpyxl") as writer:
+        students_df.to_excel(writer, sheet_name="students", index=False)
+    out.seek(0)
+
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/ingest",
+        files={"file": ("cohort.xlsx", out, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    )
+    assert resp.status_code == 201
+
+    traces = store.get_plan_traces("STU_TRACE_1")
+    assert len(traces) == 1
+    assert traces[0].decision_type == "plan"
+    assert traces[0].explanation.config_version == "v1"
+
 
 def test_get_interventions_endpoint():
     from fastapi.testclient import TestClient

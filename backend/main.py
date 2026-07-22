@@ -7,9 +7,11 @@ import os
 from backend.models import (
     StudentState, Plan,
     RiskResult, PredictionResult, InternshipMatch, TopicMemory, ChatRequest,
-    GradeRequest, ReviewRequest
+    GradeRequest, ReviewRequest, PlanDecisionTrace, PlanExplanation
 )
 from backend.store import InMemoryStore
+from backend.platform_links import PlatformLinkStore, synthesize_consent_from_handles, resolve_active_handles
+from backend.policy import get_policy
 from backend.ingest import ingest_excel
 from backend.risk import calculate_risk
 from backend.predict import predict_trends
@@ -37,22 +39,23 @@ app.add_middleware(
 
 router = APIRouter(prefix="/api/v1")
 store = InMemoryStore(persist_path=os.environ.get("POLARIS_PERSIST_PATH"))
+platform_links = PlatformLinkStore()
 
 
 
 def generate_plan_for_student(student: StudentState) -> Plan:
     derived_signals = store.get_derived(student.student_id)
-    
+
     risk_state = calculate_risk(student, derived_signals)
     student.risk = risk_state
     student.predictions = predict_trends(student)
 
     active_interventions = evaluate_interventions(
-        student, risk_state, derived_signals=derived_signals
+        student, risk_state, derived_signals=derived_signals, platform_links=platform_links
     )
     plan = build_plan(student, risk_state, active_interventions)
     plan.message = phrase_intervention_message(student, plan)
-    
+
     # Write DecisionTrace
     trace_id = f"trace_{student.student_id}_{int(datetime.now(timezone.utc).timestamp())}"
     store.append_trace({
@@ -67,7 +70,18 @@ def generate_plan_for_student(student: StudentState) -> Plan:
         "confidence": 1.0,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-    
+
+    store.add_plan_trace(PlanDecisionTrace(
+        student_id=student.student_id,
+        decision_type="plan",
+        explanation=PlanExplanation(
+            summary=f"{len(active_interventions)} interventions, risk={risk_state.level}",
+            factors=list(risk_state.reasons),
+            config_version=get_policy().version,
+        ),
+        computed_at=datetime.now(timezone.utc).isoformat(),
+    ))
+
     return plan
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
@@ -89,6 +103,7 @@ async def ingest_cohort(file: UploadFile):
             duplicate_skipped.append(student.student_id)
             continue
 
+        synthesize_consent_from_handles(platform_links, student)
         plan = generate_plan_for_student(student)
         store.save_student(student)
         store.save_plan(student.student_id, plan)
@@ -214,7 +229,7 @@ async def get_student_coding(student_id: str):
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
 
-    cf_handle = (student.coding_handles or {}).get("codeforces")
+    cf_handle = resolve_active_handles(platform_links, student_id).get("codeforces")
     if not cf_handle:
         return {"codeforces": None, "note": "No Codeforces handle registered for this student."}
 

@@ -5,24 +5,31 @@ Interventions Module: Trigger specific actions (e.g., peer tutoring, faculty ale
 import json
 import os
 from typing import List, Dict, Any, Optional
-from backend.models import StudentState, Intervention, RiskResult
+from backend.models import StudentState, Intervention, RiskResult, PolicyConfig
 from backend.retain import due_topics
 from backend.internships import match_internships
+from backend.platform_links import PlatformLinkStore, resolve_active_handles
+from backend import policy as policy_module
 
 def evaluate_interventions(
     student: StudentState,
     risk_state: RiskResult,
     internships_db: Optional[List[Dict[str, Any]]] = None,
     derived_signals: Optional[Dict[str, Any]] = None,
+    platform_links: Optional[PlatformLinkStore] = None,
+    policy: Optional[PolicyConfig] = None,
 ) -> List[Intervention]:
     """
     Evaluates risk and student metrics against predefined rules to trigger interventions.
     """
+    if policy is None:
+        policy = policy_module.get_policy()
+
     interventions = []
     sid = student.student_id
 
-    # 1. recovery_plan: days_since_active >= 5
-    if student.days_since_active >= 5:
+    # 1. recovery_plan: days_since_active >= policy.days_since_active_threshold
+    if student.days_since_active >= policy.days_since_active_threshold:
         interventions.append(Intervention(
             id=f"{sid}:recovery_plan",
             action="recovery_plan",
@@ -78,7 +85,7 @@ def evaluate_interventions(
     # 6. git_nudge: THREE-STATE check on derived GitHub signal
     if derived_signals is not None and "github_activity" in derived_signals:
         github_val = derived_signals["github_activity"].get("value", -1)
-        if github_val >= 10:
+        if github_val >= policy.github_inactivity_threshold:
             interventions.append(Intervention(
                 id=f"{sid}:git_nudge",
                 action="git_nudge",
@@ -87,8 +94,8 @@ def evaluate_interventions(
                 auto=True
             ))
 
-    # 7. linkedin_nudge: days_since_linkedin >= 14
-    if student.days_since_linkedin >= 14:
+    # 7. linkedin_nudge: days_since_linkedin >= policy.days_since_linkedin_threshold
+    if student.days_since_linkedin >= policy.days_since_linkedin_threshold:
         interventions.append(Intervention(
             id=f"{sid}:linkedin_nudge",
             action="linkedin_nudge",
@@ -112,7 +119,7 @@ def evaluate_interventions(
         else:
             internships_db = []
             
-    matches = match_internships(student.skills, student.cgpa, internships_db)
+    matches = match_internships(student.skills, student.cgpa, internships_db, policy=policy)
     ready_matches = [m for m in matches if m.match == 1.0]
     for m in ready_matches:
         interventions.append(Intervention(
@@ -133,11 +140,14 @@ def evaluate_interventions(
             auto=False
         ))
 
-    # 10. coding_nudge: coding activity >= 7
+    # 10. coding_nudge: coding activity >= policy.coding_inactivity_threshold, gated on
+    # active consent for that platform (revoked/expired links stop contributing even if
+    # the cached derived signal is still stale-but-present).
     if derived_signals is not None and "coding_activity" in derived_signals:
         coding_val = derived_signals["coding_activity"].get("value", -1)
-        if coding_val >= 7:
-            platform = derived_signals["coding_activity"].get("source", "unknown")
+        platform = derived_signals["coding_activity"].get("source", "unknown")
+        consent_ok = platform_links is None or platform in resolve_active_handles(platform_links, sid)
+        if coding_val >= policy.coding_inactivity_threshold and consent_ok:
             interventions.append(Intervention(
                 id=f"{sid}:coding_nudge:{platform}",
                 action="coding_nudge",

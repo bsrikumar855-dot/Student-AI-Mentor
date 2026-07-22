@@ -16,6 +16,8 @@ DETERMINISTIC_CORE_FILES = [
     "backend/adapters/codeforces.py",
     "backend/normalize.py",
     "backend/collector.py",
+    "backend/platform_links.py",
+    "backend/policy.py",
 ]
 
 LLM_MODULES = {
