@@ -53,7 +53,7 @@
   ],
   "skills": ["Python", "SQL", "Git"],
   "risk": {
-    "score": 45.0,
+    "score": 45,
     "level": "Medium",
     "reasons": ["Downward trend in Database Systems", "Low exam completion in Database Systems"],
     "components": {
