@@ -397,4 +397,64 @@ async def demo_reset():
         store.dump_json(store.persist_path)
     return {"success": True}
 
+@router.get("/interventions")
+async def list_interventions():
+    result = []
+    for student in store.list_students():
+        derived_signals = store.get_derived(student.student_id)
+        risk_state = student.risk
+        if not risk_state:
+            risk_state = calculate_risk(student, derived_signals)
+            student.risk = risk_state
+            
+        active_interventions = evaluate_interventions(
+            student, risk_state, derived_signals=derived_signals
+        )
+        plan = store.get_plan(student.student_id)
+        for intervention in active_interventions:
+            status = "pending" if not intervention.auto else "auto_sent"
+            approved = False
+            if plan:
+                for plan_inter in plan.interventions:
+                    if plan_inter.id == intervention.id:
+                        approved = plan_inter.reviewed
+                        break
+            result.append({
+                "id": intervention.id,
+                "student_id": student.student_id,
+                "student_name": student.name,
+                "action": intervention.action,
+                "why": intervention.why,
+                "kind": intervention.kind,
+                "auto": intervention.auto,
+                "status": status,
+                "approved": approved
+            })
+    return result
+
+@app.on_event("startup")
+async def startup_event():
+    if not store.list_students():
+        cohort_path = os.path.join(os.path.dirname(__file__), "data", "cohort.xlsx")
+        if not os.path.exists(cohort_path):
+            cohort_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend", "data", "cohort.xlsx")
+        if os.path.exists(cohort_path):
+            try:
+                with open(cohort_path, "rb") as f:
+                    students, _ = ingest_excel(f)
+                for student in students:
+                    store.save_student(student)
+                
+                from backend.collector import run_collection
+                run_collection(store)
+                
+                for student in students:
+                    plan = generate_plan_for_student(student)
+                    store.save_plan(student.student_id, plan)
+                
+                if getattr(store, "persist_path", None):
+                    store.dump_json(store.persist_path)
+            except Exception as e:
+                print(f"Failed to auto-ingest cohort: {e}")
+
 app.include_router(router)

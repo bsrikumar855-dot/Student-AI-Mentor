@@ -57,6 +57,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
         ...data.risk,
         level: (data.risk.level || 'low').toLowerCase()
       } : { level: 'low', score: 0, reasons: [] },
+      subjects: (data.subjects || []).map((s: any) => ({
+        ...s,
+        score: s.latest ?? s.score ?? 0
+      })),
       activity: data.activity || {
         days_since_active: data.days_since_active || 0,
         days_since_commit: data.days_since_commit || 0,

@@ -6,6 +6,8 @@ import { Shield, Sparkles, BookOpen } from 'lucide-react';
 import { GlassPanel } from '../../../design/primitives';
 import { useToast } from '../../../components/components';
 
+import apiClient from '../../../api/client';
+
 const loginSchema = z.object({
   email: z.string().email('Provide a valid university email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -36,17 +38,8 @@ export const LoginPage: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const handleLogin = async (data: LoginForm) => {
     setLoading(true);
     try {
-      const response = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+      const resData = await apiClient.post<any>('/auth/login', data);
 
-      if (!response.ok) {
-        throw new Error('Invalid credentials');
-      }
-
-      const resData = await response.json();
       localStorage.setItem('drishta_auth_token', resData.token);
       localStorage.setItem('drishta_student_id', resData.student_id);
       

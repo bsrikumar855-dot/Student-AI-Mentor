@@ -639,3 +639,44 @@ def test_coding_nudge_fires_at_seven_days(monkeypatch):
     interventions3 = evaluate_interventions(student, risk_state, derived_signals=None)
     actions3 = [i.action for i in interventions3]
     assert "coding_nudge" not in actions3
+
+def test_get_interventions_endpoint():
+    from fastapi.testclient import TestClient
+    from backend.main import app, store
+    from backend.models import StudentState, RiskResult, RiskComponents
+    
+    # Setup a mock student
+    student = StudentState(
+        student_id="STU_HIGH_TEST",
+        name="High Risk Student",
+        cgpa=5.5,
+        attendance=0.8,
+        subjects=[],
+        exams=[],
+        days_since_active=1,
+        days_since_commit=1,
+        days_since_linkedin=1,
+        goals_met_streak=0,
+        topics=[],
+        skills=["python"],
+        risk=RiskResult(
+            score=85,
+            level="High",
+            reasons=["High risk reasons"],
+            components=RiskComponents(score_gap=0.5, syllabus_behind=3.0, activity_recency=0.0, trend=0.0, coding_activity=0.0),
+            computed_at="2026-07-22T10:00:00Z"
+        )
+    )
+    
+    # Save the student to store
+    store.save_student(student)
+    
+    client = TestClient(app)
+    response = client.get("/api/v1/interventions")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) > 0
+    
+    # Assert it includes flag_at_risk for the high student
+    has_flag_at_risk = any(item["student_id"] == "STU_HIGH_TEST" and item["action"] == "flag_at_risk" for item in data)
+    assert has_flag_at_risk

@@ -25,8 +25,9 @@ export const StudentRiskSchema = z.object({
 export const SubjectStateSchema = z.object({
   name: z.string(),
   score: z.number().default(0),
+  latest: z.number().optional(),
   trend: z.array(z.number()).default([]),
-  flag: z.boolean().default(false),
+  flag: z.union([z.boolean(), z.string()]).optional().catch(false),
 }).passthrough();
 
 export const ExamStateSchema = z.object({
