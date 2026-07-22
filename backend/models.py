@@ -38,6 +38,8 @@ class RiskResult(BaseModel):
 class ExamForecast(BaseModel):
     subject: str
     projected_score: float
+    fail_risk: Literal["Low", "Medium", "High"]
+    why: str
 
 class PredictionResult(BaseModel):
     projected_gpa: float
