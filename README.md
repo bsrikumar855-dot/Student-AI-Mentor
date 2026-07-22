@@ -1,6 +1,6 @@
 #  Drishta- Sees the student, Shows the reason
 
-Polaris is a proactive student mentoring system that scores academic risk, schedules study plans, tracks spaced repetition review cards, matches students with internships, and handles student-faculty intervention alerts. 
+Drishta is a proactive student mentoring system that scores academic risk, schedules study plans, tracks spaced repetition review cards, matches students with internships, and handles student-faculty intervention alerts. 
 
 It is designed with a **deterministic core** running standard Python logic (zero LLM dependencies), coupled with an isolated **natural language layer** that phrases student outreach and handles agent chat.
 
