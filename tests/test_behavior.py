@@ -58,17 +58,61 @@ def test_ingest_excel_behavior():
         topics_df.to_excel(writer, sheet_name="topics", index=False)
         
     out.seek(0)
-    res = ingest_excel(out)
-    assert len(res) == 1
-    assert res[0].student_id == "STU1"
-    assert res[0].name == "Bob"
-    assert res[0].cgpa == 8.0
-    assert len(res[0].subjects) == 1
-    assert res[0].subjects[0].name == "Math"
-    assert res[0].subjects[0].latest == 85.0
-    assert len(res[0].skills) == 2
-    assert "python" in res[0].skills
-    assert "git" in res[0].skills
+    students, skipped = ingest_excel(out)
+    assert len(students) == 1
+    assert students[0].student_id == "STU1"
+    assert students[0].name == "Bob"
+    assert students[0].cgpa == 8.0
+    assert len(students[0].subjects) == 1
+    assert students[0].subjects[0].name == "Math"
+    assert students[0].subjects[0].latest == 85.0
+    assert len(students[0].skills) == 2
+    assert "python" in students[0].skills
+    assert "git" in students[0].skills
+    assert skipped == []
+
+
+def test_ingest_excel_skips_malformed_row():
+    import io
+    import pandas as pd
+
+    # STU1 is missing cgpa; STU2 is well-formed and should still be ingested.
+    students_df = pd.DataFrame([
+        {
+            "student_id": "STU1",
+            "name": "Bob",
+            "cgpa": None,
+            "attendance": 0.9,
+            "days_since_active": 1,
+            "days_since_commit": 2,
+            "days_since_linkedin": 3,
+            "goals_met_streak": 5,
+            "skills": "python,git"
+        },
+        {
+            "student_id": "STU2",
+            "name": "Alice",
+            "cgpa": 9.0,
+            "attendance": 0.95,
+            "days_since_active": 0,
+            "days_since_commit": 0,
+            "days_since_linkedin": 0,
+            "goals_met_streak": 2,
+            "skills": "java"
+        }
+    ])
+
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine='openpyxl') as writer:
+        students_df.to_excel(writer, sheet_name="students", index=False)
+
+    out.seek(0)
+    students, skipped = ingest_excel(out)
+
+    assert [s.student_id for s in students] == ["STU2"]
+    assert len(skipped) == 1
+    assert skipped[0]["student_id"] == "STU1"
+    assert "reason" in skipped[0] and skipped[0]["reason"]
 
 
 def test_calculate_risk_behavior():
@@ -228,5 +272,4 @@ def test_evaluate_interventions_behavior():
     actions = [i.action for i in interventions]
     assert "recovery_plan" in actions
     assert "internship_match" in actions
-
 

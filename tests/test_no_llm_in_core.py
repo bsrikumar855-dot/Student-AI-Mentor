@@ -10,6 +10,7 @@ DETERMINISTIC_CORE_FILES = [
     "backend/internships.py",
     "backend/ingest.py",
     "backend/store.py",
+    "backend/plan.py",
 ]
 
 LLM_MODULES = {
