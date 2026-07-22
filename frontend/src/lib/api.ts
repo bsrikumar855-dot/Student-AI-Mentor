@@ -11,6 +11,16 @@ export const getRole = () => currentRole;
 
 export type RiskBand = 'low' | 'medium' | 'high' | 'crit';
 
+export interface CodingProfile {
+  handle: string;
+  rating?: number;
+  max_rating?: number;
+  rank?: string;
+  solved_count?: number;
+  last_active_days?: number;
+  source?: string;
+}
+
 export interface ComponentBar {
   id: string;
   label: string;
@@ -339,41 +349,116 @@ export const api = {
   },
 
   // Reviews
-  getReviewsDueToday: async (_studentId: string): Promise<ReviewTopic[]> => {
-    await delay();
-    return [
-      { id: 'rt1', title: 'Calculus - Limits', dueToday: true },
-      { id: 'rt2', title: 'Physics - Kinematics', dueToday: true }
-    ];
+  getReviewsDueToday: async (studentId: string): Promise<ReviewTopic[]> => {
+    const targetId = (studentId === 'stu_123' || !studentId) ? 'STU_HERO' : studentId;
+    try {
+      const resp = await fetchWithTimeout(`${BASE}/students/${targetId}/reviews`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      return data.map((item: any) => ({
+        id: item.topic,
+        title: item.topic,
+        dueToday: true,
+        lastGrade: undefined
+      }));
+    } catch (e) {
+      console.warn("getReviewsDueToday failed, using mock:", e);
+      return [
+        { id: 'rt1', title: 'Calculus - Limits', dueToday: true },
+        { id: 'rt2', title: 'Physics - Kinematics', dueToday: true }
+      ];
+    }
   },
-  gradeReview: async (_studentId: string, _topicId: string, _grade: number) => {
-    await delay(300);
-    return { success: true };
+  gradeReview: async (studentId: string, topicId: string, grade: number) => {
+    const targetId = (studentId === 'stu_123' || !studentId) ? 'STU_HERO' : studentId;
+    try {
+      const resp = await fetchWithTimeout(`${BASE}/students/${targetId}/reviews/${topicId}/grade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quality: grade })
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return { success: true };
+    } catch (e) {
+      console.warn("gradeReview failed, using mock success:", e);
+      return { success: true };
+    }
   },
 
   // Internships
-  getInternships: async (_studentId: string): Promise<InternshipMatch[]> => {
-    await delay();
-    return [
-      {
-        id: 'int1',
-        title: 'Data Science Intern',
-        company: 'Stark Industries',
-        matchScore: 85,
-        haveSkills: ['Python', 'SQL'],
-        missingSkills: ['Machine Learning'],
-        whyCopy: 'Your strong analytical grades align perfectly here.'
-      }
-    ];
+  getInternships: async (studentId: string): Promise<InternshipMatch[]> => {
+    const targetId = (studentId === 'stu_123' || !studentId) ? 'STU_HERO' : studentId;
+    try {
+      const resp = await fetchWithTimeout(`${BASE}/students/${targetId}/internships`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      return data.map((item: any) => ({
+        id: item.title,
+        title: item.title,
+        company: item.company,
+        matchScore: Math.round((item.match || 0) * 100),
+        haveSkills: item.have || [],
+        missingSkills: item.missing || [],
+        whyCopy: item.why || ""
+      }));
+    } catch (e) {
+      console.warn("getInternships failed, using mock:", e);
+      return [
+        {
+          id: 'int1',
+          title: 'Data Science Intern',
+          company: 'Stark Industries',
+          matchScore: 85,
+          haveSkills: ['Python', 'SQL'],
+          missingSkills: ['Machine Learning'],
+          whyCopy: 'Your strong analytical grades align perfectly here.'
+        }
+      ];
+    }
   },
 
   // Predictions
-  getPredictions: async (_studentId: string): Promise<Prediction[]> => {
-    await delay();
-    return [
-      { id: 'p1', metric: 'End of Term GPA', forecast: 3.4, trend: 'up', history: [3.1, 3.2, 3.2, 3.3, 3.4] },
-      { id: 'p2', metric: 'Credit Completion', forecast: 100, trend: 'steady', history: [100, 100, 100, 100, 100] }
-    ];
+  getPredictions: async (studentId: string): Promise<Prediction[]> => {
+    const targetId = (studentId === 'stu_123' || !studentId) ? 'STU_HERO' : studentId;
+    try {
+      const resp = await fetchWithTimeout(`${BASE}/students/${targetId}/predictions`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      
+      const forecasts: Prediction[] = (data.exam_forecast || []).map((f: any) => {
+        let trend: 'up' | 'down' | 'steady' = 'steady';
+        if (f.fail_risk === 'High') trend = 'down';
+        else if (f.fail_risk === 'Low') trend = 'up';
+        return {
+          id: f.subject,
+          metric: f.subject,
+          forecast: Math.round(f.projected_score),
+          trend,
+          history: []
+        };
+      });
+
+      if (data.projected_gpa !== undefined) {
+        let gpaTrend: 'up' | 'down' | 'steady' = 'steady';
+        if (data.exam_trend === 'improving') gpaTrend = 'up';
+        else if (data.exam_trend === 'declining') gpaTrend = 'down';
+        forecasts.unshift({
+          id: 'gpa',
+          metric: 'Projected GPA',
+          forecast: data.projected_gpa,
+          trend: gpaTrend,
+          history: []
+        });
+      }
+
+      return forecasts;
+    } catch (e) {
+      console.warn("getPredictions failed, using mock:", e);
+      return [
+        { id: 'p1', metric: 'End of Term GPA', forecast: 3.4, trend: 'up', history: [3.1, 3.2, 3.2, 3.3, 3.4] },
+        { id: 'p2', metric: 'Credit Completion', forecast: 100, trend: 'steady', history: [100, 100, 100, 100, 100] }
+      ];
+    }
   },
 
   // Chat
@@ -498,6 +583,19 @@ export const api = {
     } catch (e) {
       console.warn("resetDemo failed:", e);
       return { success: false };
+    }
+  },
+
+  getCoding: async (studentId: string): Promise<CodingProfile | null> => {
+    const targetId = (studentId === 'stu_123' || !studentId) ? 'STU_HERO' : studentId;
+    try {
+      const resp = await fetchWithTimeout(`${BASE}/students/${targetId}/coding`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      return data.codeforces;
+    } catch (e) {
+      console.warn("getCoding failed, returning null:", e);
+      return null;
     }
   },
 

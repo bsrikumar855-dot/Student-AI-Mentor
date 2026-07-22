@@ -43,7 +43,16 @@ const StudentHome: React.FC = () => {
     loadTabData(activeTab);
   }, [activeTab]);
 
-  if (!state || !plan) return <div className="min-h-screen bg-bg flex items-center justify-center font-ceremonial text-2xl text-ink">Loading...</div>;
+  if (!state || !plan) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center font-ceremonial text-xl text-ink">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="font-mono text-sm text-ink-soft">Loading student profile...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg pb-24">
@@ -131,7 +140,7 @@ const TodayTab = ({ plan }: { plan: StudentPlan }) => {
             <div className={`transition-all duration-500 ${task.completed ? 'opacity-60 grayscale' : ''}`}>
               <h4 className={`font-display text-lg ${task.completed ? 'line-through decoration-brass' : ''}`}>{task.title}</h4>
               <span className="text-xs font-mono text-ink-soft bg-surface px-2 py-0.5 rounded border border-hairline mt-2 inline-block">
-                Why: Based on upcoming Physics midterm
+                Why: Customized study task
               </span>
             </div>
             
@@ -153,38 +162,91 @@ const TodayTab = ({ plan }: { plan: StudentPlan }) => {
   );
 };
 
-const MeTab = ({ state }: { state: StudentState }) => (
-  <div className="flex flex-col md:flex-row gap-8">
-    <div className="flex-1">
-      <LivingCrest riskBand={state.riskBand} components={state.components} motto={state.motto} animateOnLoad={false} />
-      
-      {state.whyCopy && (
-        <div className="mt-8 p-4 bg-surface rounded border-l-4 border-brass">
-          <EngravedText>{state.whyCopy}</EngravedText>
-        </div>
-      )}
-    </div>
-    <div className="flex-1 space-y-4">
-      <h2 className="font-ceremonial text-2xl uppercase tracking-widest text-brass mb-4">Components</h2>
-      {state.components.map(c => (
-        <div key={c.id} className="mb-4">
-          <div className="flex justify-between font-mono text-sm mb-1">
-            <span>{c.label}</span>
-            <span className="text-ink-soft">{c.value}%</span>
+const MeTab = ({ state }: { state: StudentState }) => {
+  const [coding, setCoding] = useState<any>(null);
+  const [loadingCoding, setLoadingCoding] = useState(true);
+
+  useEffect(() => {
+    api.getCoding(state.id).then(profile => {
+      setCoding(profile);
+      setLoadingCoding(false);
+    });
+  }, [state.id]);
+
+  return (
+    <div className="flex flex-col md:flex-row gap-8">
+      <div className="flex-1">
+        <LivingCrest riskBand={state.riskBand} components={state.components} motto={state.motto} animateOnLoad={false} />
+        
+        {state.whyCopy && (
+          <div className="mt-8 p-4 bg-surface rounded border-l-4 border-brass">
+            <EngravedText>{state.whyCopy}</EngravedText>
           </div>
-          <div className="h-2 bg-hairline rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full bg-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${c.value}%` }}
-              transition={{ duration: 1, ease: 'easeOut' }}
-            />
-          </div>
+        )}
+
+        <div className="mt-8 p-6 bg-surface rounded border border-hairline">
+          <h3 className="font-ceremonial text-2xl uppercase tracking-widest text-brass mb-4">Coding Profile</h3>
+          {loadingCoding ? (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-brass border-t-transparent rounded-full animate-spin" />
+              <span className="font-mono text-sm text-ink-soft">Loading profile...</span>
+            </div>
+          ) : coding ? (
+            <div className="space-y-2 font-mono text-sm">
+              <div className="flex justify-between border-b border-hairline/50 pb-1">
+                <span className="text-ink-soft">Handle</span>
+                <span className="text-ink font-semibold">{coding.handle}</span>
+              </div>
+              <div className="flex justify-between border-b border-hairline/50 pb-1">
+                <span className="text-ink-soft">Rating</span>
+                <span className="text-ink font-semibold">{coding.rating || "N/A"}</span>
+              </div>
+              <div className="flex justify-between border-b border-hairline/50 pb-1">
+                <span className="text-ink-soft">Max Rating</span>
+                <span className="text-ink font-semibold">{coding.max_rating || "N/A"}</span>
+              </div>
+              <div className="flex justify-between border-b border-hairline/50 pb-1">
+                <span className="text-ink-soft">Rank</span>
+                <span className="text-ink font-semibold capitalize">{coding.rank || "N/A"}</span>
+              </div>
+              <div className="flex justify-between border-b border-hairline/50 pb-1">
+                <span className="text-ink-soft">Solved Count</span>
+                <span className="text-ink font-semibold">{coding.solved_count !== undefined ? coding.solved_count : "N/A"}</span>
+              </div>
+              <div className="flex justify-between pb-1">
+                <span className="text-ink-soft">Inactive Days</span>
+                <span className="text-ink font-semibold">{coding.last_active_days !== undefined ? coding.last_active_days : "N/A"} days</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-ink-soft font-body text-sm py-2">
+              No coding profile linked.
+            </div>
+          )}
         </div>
-      ))}
+      </div>
+      <div className="flex-1 space-y-4">
+        <h2 className="font-ceremonial text-2xl uppercase tracking-widest text-brass mb-4">Components</h2>
+        {state.components.map(c => (
+          <div key={c.id} className="mb-4">
+            <div className="flex justify-between font-mono text-sm mb-1">
+              <span>{c.label}</span>
+              <span className="text-ink-soft">{c.value}%</span>
+            </div>
+            <div className="h-2 bg-hairline rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-primary"
+                initial={{ width: 0 }}
+                animate={{ width: `${c.value}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const ReviewsTab = ({ reviews }: { reviews: ReviewTopic[] }) => {
   const [graded, setGraded] = useState<Record<string, number>>({});
