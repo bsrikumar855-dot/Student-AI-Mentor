@@ -147,6 +147,40 @@ class InternshipMatch(BaseModel):
     missing: List[str]
     why: str
 
+class PlanExplanation(BaseModel):
+    summary: str
+    factors: List[str] = []
+    config_version: Optional[str] = None
+
+class PlanDecisionTrace(BaseModel):
+    student_id: str
+    decision_type: Literal["risk", "prediction", "intervention", "plan", "internship_match"]
+    explanation: PlanExplanation
+    computed_at: str
+
+class PlatformLink(BaseModel):
+    student_id: str
+    tenant_id: str = "default"
+    platform: str
+    handle: str
+    consent_at: datetime
+    valid_from: datetime
+    valid_to: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+
+class PolicyConfig(BaseModel):
+    version: str
+    days_since_active_threshold: int = 5
+    github_inactivity_threshold: int = 10
+    days_since_linkedin_threshold: int = 14
+    coding_inactivity_threshold: int = 7
+    internship_match_min: float = 0.5
+    risk_activity_divisor: float = 7.0
+    risk_weights: Dict[str, float] = {
+        "score_gap": 0.35, "syllabus_behind": 0.24,
+        "activity_recency": 0.22, "trend": 0.14, "coding_activity": 0.05,
+    }
+
 class ChatRequest(BaseModel):
     student_id: str
     message: str
