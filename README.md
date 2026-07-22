@@ -1,4 +1,4 @@
-# Polaris — Proactive AI Student Mentor
+#  Drishta- Sees the student, Shows the reason
 
 Polaris is a proactive student mentoring system that scores academic risk, schedules study plans, tracks spaced repetition review cards, matches students with internships, and handles student-faculty intervention alerts. 
 
