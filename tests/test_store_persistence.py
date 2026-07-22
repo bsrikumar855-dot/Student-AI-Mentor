@@ -2,7 +2,10 @@ import json
 import os
 from datetime import datetime
 from backend.store import InMemoryStore
-from backend.models import StudentState, Plan, DailyTarget, ScheduleSlot, Intervention
+from backend.models import (
+    StudentState, Plan, DailyTarget, ScheduleSlot, Intervention,
+    PlanDecisionTrace, PlanExplanation,
+)
 
 
 def make_student() -> StudentState:
@@ -41,15 +44,26 @@ def make_plan() -> Plan:
     )
 
 
+def make_plan_trace() -> PlanDecisionTrace:
+    return PlanDecisionTrace(
+        student_id="STU1",
+        decision_type="plan",
+        explanation=PlanExplanation(summary="1 interventions, risk=Low", factors=["Low risk"], config_version="v1"),
+        computed_at="2026-07-22T10:00:00+00:00",
+    )
+
+
 def test_dump_and_load_round_trip(tmp_path):
     path = str(tmp_path / "store.json")
 
     store = InMemoryStore()
     student = make_student()
     plan = make_plan()
+    plan_trace = make_plan_trace()
     store.save_student(student)
     store.save_plan(student.student_id, plan)
     store.audit_log.append({"action": "plan_generate", "student_id": "STU1", "timestamp": "2026-07-22T10:00:00+00:00"})
+    store.add_plan_trace(plan_trace)
 
     store.dump_json(path)
     assert os.path.exists(path)
@@ -60,6 +74,7 @@ def test_dump_and_load_round_trip(tmp_path):
     assert loaded.get_student("STU1") == student
     assert loaded.get_plan("STU1") == plan
     assert loaded.audit_log == store.audit_log
+    assert loaded.get_plan_traces("STU1") == [plan_trace]
 
 
 def test_load_json_missing_path_is_noop(tmp_path):

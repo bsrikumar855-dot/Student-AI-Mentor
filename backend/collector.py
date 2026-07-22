@@ -1,7 +1,9 @@
 import sys
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 from backend.store import InMemoryStore
+from backend.platform_links import PlatformLinkStore, resolve_active_handles
 from backend.adapters import get_adapter
 from backend.normalize import snapshot_to_activity
 from backend.ingest import ingest_excel
@@ -9,20 +11,33 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def run_collection(store: InMemoryStore) -> None:
+def run_collection(store: InMemoryStore, platform_links: Optional[PlatformLinkStore] = None) -> None:
     """
     Iterate over students with coding_handles, call adapter, save_raw,
     then save_derived the normalized signals.
     Failures go to a dead-letter list, never crashing the run.
+
+    If `platform_links` is provided, only (platform, handle) pairs with an active
+    consent row are processed -- a revoked or expired link is skipped entirely,
+    so no raw snapshot or derived signal gets written/refreshed for it. If
+    `platform_links` is omitted, behavior is unchanged (no gating).
     """
     dead_letters = []
     fetched_at = datetime.now(timezone.utc).isoformat()
-    
+
     for student in store.list_students():
         if not student.coding_handles:
             continue
-            
+
+        active_handles = (
+            resolve_active_handles(platform_links, student.student_id)
+            if platform_links is not None
+            else student.coding_handles
+        )
+
         for platform, handle in student.coding_handles.items():
+            if platform not in active_handles:
+                continue
             try:
                 adapter = get_adapter(platform)
                 snap = adapter(handle)

@@ -4,23 +4,25 @@ Risk Scoring Module: Compute a deterministic risk score using weighted factors l
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from backend.models import StudentState, RiskResult, RiskComponents
+from backend.models import StudentState, RiskResult, RiskComponents, PolicyConfig
+from backend import policy as policy_module
 
-# SPEC Section 2: fixed weights and target for risk scoring.
+# SPEC Section 2: fixed target for risk scoring. Weights and the activity_recency
+# divisor now live in PolicyConfig (see backend/policy.py).
 # Banding: High if score>=45, Medium if score>=25, else Low.
-WEIGHTS = {
-    "score_gap": 0.34,
-    "syllabus_behind": 0.25,
-    "activity_recency": 0.25,
-    "trend": 0.15,
-    "coding_activity": 0.01,
-}
 TARGET = 60.0
 
-def calculate_risk(student: StudentState, derived_signals: Optional[Dict[str, Any]] = None) -> RiskResult:
+def calculate_risk(
+    student: StudentState,
+    derived_signals: Optional[Dict[str, Any]] = None,
+    policy: Optional[PolicyConfig] = None,
+) -> RiskResult:
     """
     Computes a risk score and risk level for a student.
     """
+    if policy is None:
+        policy = policy_module.get_policy()
+
     # 1. score_gap
     if student.subjects:
         score_gap = sum(max(0.0, (TARGET - s.latest) / TARGET) for s in student.subjects) / len(student.subjects)
@@ -36,7 +38,7 @@ def calculate_risk(student: StudentState, derived_signals: Optional[Dict[str, An
         syllabus_behind = 0.0
 
     # 3. activity_recency
-    activity_recency = min(student.days_since_active / 7.0, 1.0)
+    activity_recency = min(student.days_since_active / policy.risk_activity_divisor, 1.0)
 
     # 4. trend
     trend_terms = []
@@ -62,11 +64,11 @@ def calculate_risk(student: StudentState, derived_signals: Optional[Dict[str, An
     )
 
     weighted_terms = {
-        "score_gap": WEIGHTS["score_gap"] * score_gap,
-        "syllabus_behind": WEIGHTS["syllabus_behind"] * syllabus_behind,
-        "activity_recency": WEIGHTS["activity_recency"] * activity_recency,
-        "trend": WEIGHTS["trend"] * trend,
-        "coding_activity": WEIGHTS["coding_activity"] * coding_activity,
+        "score_gap": policy.risk_weights["score_gap"] * score_gap,
+        "syllabus_behind": policy.risk_weights["syllabus_behind"] * syllabus_behind,
+        "activity_recency": policy.risk_weights["activity_recency"] * activity_recency,
+        "trend": policy.risk_weights["trend"] * trend,
+        "coding_activity": policy.risk_weights["coding_activity"] * coding_activity,
     }
 
     score01 = sum(weighted_terms.values())
@@ -111,7 +113,7 @@ def calculate_risk(student: StudentState, derived_signals: Optional[Dict[str, An
     
     # Build FeatureContribution objects
     contributions = []
-    for term, weight in WEIGHTS.items():
+    for term, weight in policy.risk_weights.items():
         val = {
             "score_gap": score_gap,
             "syllabus_behind": syllabus_behind,

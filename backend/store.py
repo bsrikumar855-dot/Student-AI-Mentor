@@ -6,7 +6,7 @@ Optionally persisted to a single JSON file on disk (see dump_json/load_json).
 import json
 import os
 from typing import Dict, Optional, List, Any
-from backend.models import StudentState, Plan
+from backend.models import StudentState, Plan, PlanDecisionTrace
 import backend.coding as _coding_module
 
 class InMemoryStore:
@@ -20,6 +20,7 @@ class InMemoryStore:
         self._raw_snapshots: Dict[str, Any] = {}
         self._derived_signals: Dict[str, Any] = {}
         self._decision_traces: List[Any] = []
+        self.plan_traces: List[PlanDecisionTrace] = []
         self.persist_path = persist_path
         if self.persist_path and os.path.exists(self.persist_path):
             self.load_json(self.persist_path)
@@ -65,6 +66,12 @@ class InMemoryStore:
     def append_trace(self, trace: dict) -> None:
         self._decision_traces.append(trace)
 
+    def add_plan_trace(self, trace: PlanDecisionTrace) -> None:
+        self.plan_traces.append(trace)
+
+    def get_plan_traces(self, student_id: str) -> List[PlanDecisionTrace]:
+        return [t for t in self.plan_traces if t.student_id == student_id]
+
     def dump_json(self, path: str) -> None:
         """
         Serializes students, plans, audit log, and the coding cache to a single JSON
@@ -79,6 +86,7 @@ class InMemoryStore:
             "raw_snapshots": self._raw_snapshots,
             "derived_signals": self._derived_signals,
             "decision_traces": self._decision_traces,
+            "plan_traces": [t.model_dump(mode="json") for t in self.plan_traces],
         }
         tmp_path = path + ".tmp"
         with open(tmp_path, "w") as f:
@@ -102,6 +110,7 @@ class InMemoryStore:
             raw_snapshots = data.get("raw_snapshots", {})
             derived_signals = data.get("derived_signals", {})
             decision_traces = data.get("decision_traces", [])
+            plan_traces = [PlanDecisionTrace(**d) for d in data.get("plan_traces", [])]
         except Exception:
             # Leave existing in-memory state untouched on any failure.
             return
@@ -111,6 +120,7 @@ class InMemoryStore:
         self._raw_snapshots = raw_snapshots
         self._derived_signals = derived_signals
         self._decision_traces = decision_traces
+        self.plan_traces = plan_traces
         # Restore coding cache if present (missing key is not an error)
         try:
             coding_cache = data.get("coding_cache", {})
