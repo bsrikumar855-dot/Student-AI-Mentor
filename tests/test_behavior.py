@@ -432,3 +432,15 @@ def test_cohort_realism_and_transition():
     assert "revision_timetable" in actions
     assert "flag_at_risk" in actions
 
+def test_chat_response_fallback():
+    reply, used_llm = chat_response("Hello Polaris", [], api_key=None)
+    assert not used_llm
+    assert "Polaris Mentor: I received your message: 'Hello Polaris'." in reply
+
+def test_chat_response_exception_safety():
+    # Pass an invalid/expired key to ensure it falls back gracefully and never raises
+    reply, used_llm = chat_response("Hello Polaris", [], api_key="INVALID_API_KEY_FOR_TESTING")
+    assert not used_llm
+    assert "Polaris Mentor: I received your message: 'Hello Polaris'." in reply
+
+
