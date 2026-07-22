@@ -6,7 +6,7 @@ import json
 import os
 
 from backend.models import (
-    StudentState, Plan, DailyTarget, ScheduleSlot, Intervention, 
+    StudentState, Plan,
     RiskResult, PredictionResult, InternshipMatch, TopicMemory, ChatRequest
 )
 from backend.store import InMemoryStore
@@ -14,6 +14,7 @@ from backend.ingest import ingest_excel
 from backend.risk import calculate_risk
 from backend.predict import predict_trends
 from backend.interventions import evaluate_interventions
+from backend.plan import build_plan
 from backend.language import phrase_intervention_message, chat_response
 from backend.retain import due_topics, apply_sm2
 from backend.internships import match_internships
@@ -25,7 +26,7 @@ app = FastAPI(
 )
 
 router = APIRouter(prefix="/api/v1")
-store = InMemoryStore()
+store = InMemoryStore(persist_path=os.environ.get("POLARIS_PERSIST_PATH"))
 
 class GradeRequest(BaseModel):
     quality: int = Field(..., ge=0, le=5)
@@ -34,96 +35,12 @@ class ReviewRequest(BaseModel):
     decision: str = Field(..., pattern="^(approve|override)$")
     note: Optional[str] = None
 
-def get_highest_priority_action(interventions: List[Intervention]) -> Optional[str]:
-    priority = [
-        "revision_timetable",
-        "recovery_plan",
-        "weak_topic",
-        "revision_mission",
-        "ramp_difficulty",
-        "git_nudge",
-        "linkedin_nudge",
-        "internship_match"
-    ]
-    auto_actions = [i.action for i in interventions if i.auto]
-    for p in priority:
-        if p in auto_actions:
-            return p
-    return None
-
 def generate_plan_for_student(student: StudentState) -> Plan:
     risk_state = calculate_risk(student)
     student.risk = risk_state
-    
-    preds = predict_trends(student)
-    student.predictions = preds
-    
+    student.predictions = predict_trends(student)
     active_interventions = evaluate_interventions(student, risk_state)
-    
-    daily_targets = []
-    if not active_interventions:
-        daily_targets.append(DailyTarget(
-            id="T_GEN",
-            task="Complete today's general study plan",
-            why="Maintain academic momentum.",
-            kind="academic",
-            done=False
-        ))
-    else:
-        for idx, inter in enumerate(active_interventions):
-            task_desc = f"Address {inter.action}"
-            
-            if inter.action == "recovery_plan":
-                task_desc = "Log in to LMS and check active assignments"
-                kind = "recovery"
-            elif inter.action == "revision_timetable":
-                task_desc = f"Complete practice problems for nearest exam in {student.nearest_exam.subject if student.nearest_exam else ''}"
-                kind = "review"
-            elif inter.action == "weak_topic":
-                task_desc = "Review lecture slides for weaker grade subjects"
-                kind = "practice"
-            elif inter.action == "revision_mission":
-                task_desc = f"Complete spaced repetition review card"
-                kind = "review"
-            elif inter.action == "ramp_difficulty":
-                task_desc = "Solve advanced textbook challenge problems"
-                kind = "stretch"
-            elif inter.action == "git_nudge":
-                task_desc = "Commit and push current codebase updates to GitHub"
-                kind = "career"
-            elif inter.action == "linkedin_nudge":
-                task_desc = "Post or interact on LinkedIn to build career network"
-                kind = "career"
-            elif inter.action == "internship_match":
-                task_desc = "Review job posting and submit resume application"
-                kind = "career"
-            else:
-                kind = "academic"
-                
-            daily_targets.append(DailyTarget(
-                id=f"T_{idx+1}",
-                task=task_desc,
-                why=inter.why,
-                kind=kind,
-                done=False
-            ))
-            
-    schedule = [
-        ScheduleSlot(slot="09:00 - 10:30", task="Core Study Session"),
-        ScheduleSlot(slot="14:00 - 15:30", task="Active Practice & Revision")
-    ]
-    
-    intervention_triggered = get_highest_priority_action(active_interventions)
-    
-    plan = Plan(
-        student_id=student.student_id,
-        intervention_triggered=intervention_triggered,
-        message="",
-        daily_targets=daily_targets,
-        schedule=schedule,
-        interventions=active_interventions,
-        generated_at=datetime.now(timezone.utc).isoformat()
-    )
+    plan = build_plan(student, risk_state, active_interventions)
     plan.message = phrase_intervention_message(student, plan)
     return plan
 
@@ -131,31 +48,34 @@ def generate_plan_for_student(student: StudentState) -> Plan:
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
 async def ingest_cohort(file: UploadFile):
     try:
-        students = ingest_excel(file.file)
+        students, ingest_skipped = ingest_excel(file.file)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to parse Excel file: {str(e)}"
         )
-        
+
     ingested_ids = []
-    skipped_ids = []
-    
+    duplicate_skipped = []
+
     for student in students:
         # Check idempotency on student_id
         if store.get_student(student.student_id) is not None:
-            skipped_ids.append(student.student_id)
+            duplicate_skipped.append(student.student_id)
             continue
-            
+
         plan = generate_plan_for_student(student)
         store.save_student(student)
         store.save_plan(student.student_id, plan)
         ingested_ids.append(student.student_id)
-        
+
     return {
         "ingested": len(ingested_ids),
         "student_ids": ingested_ids,
-        "skipped": skipped_ids
+        "skipped": ingest_skipped + [
+            {"student_id": sid, "reason": "duplicate: already ingested"}
+            for sid in duplicate_skipped
+        ]
     }
 
 @router.get("/students")
