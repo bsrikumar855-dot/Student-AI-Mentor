@@ -103,12 +103,23 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       approved: data.interventions[0].reviewed || false,
     } : undefined;
 
+    const mappedInterventions = (data.interventions || []).map((inter: any) => ({
+      id: inter.id,
+      student_id: targetId,
+      action: inter.action,
+      why: inter.why,
+      kind: inter.kind,
+      auto: inter.auto,
+      approved: inter.reviewed || false,
+    }));
+
     data = {
       ...data,
       missions,
       schedule,
       intervention_triggered: Boolean(data.intervention_triggered),
       intervention: firstIntervention,
+      interventions: mappedInterventions,
     };
   } else if (requestPath.endsWith('/predictions')) {
     data = {
