@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0A0E17;
-  --color-surface: #131826;
+  --color-bg: #F7F8FA;
+  --color-surface: #FFFFFF;
   --color-primary: #7C6FF0;
   --color-brass: #E0A458;
-  --color-ink: #EAEEF7;
+  --color-ink: #14161C;
   
   --color-primary-deep: #5B4FD0;
-  --color-primary-tint: #1C2136;
+  --color-primary-tint: #ECEBFD;
   --color-brass-bright: #F2C57C;
-  --color-ink-soft: #98A2B8;
-  --color-hairline: #232A3A;
-  --color-parchment-edge: #1A2030;
+  --color-ink-soft: #5E6475;
+  --color-hairline: #E6E8EC;
+  --color-parchment-edge: #F3F4F6;
   
   --color-risk-low: #34D399;
   --color-risk-medium: #FBBF24;
@@ -67,7 +67,7 @@
 
   .engraved-text {
     color: var(--color-ink);
-    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
   }
   
   .pressed-plate {
@@ -75,12 +75,12 @@
   }
   
   .lift-shadow {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
   .lift-shadow:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 24px rgba(124, 111, 240, 0.15);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 0 24px rgba(124, 111, 240, 0.1);
   }
 
   .glow-cta {
