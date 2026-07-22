@@ -1,13 +1,13 @@
 from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 import json
 import os
 
 from backend.models import (
     StudentState, Plan,
-    RiskResult, PredictionResult, InternshipMatch, TopicMemory, ChatRequest
+    RiskResult, PredictionResult, InternshipMatch, TopicMemory, ChatRequest,
+    GradeRequest, ReviewRequest
 )
 from backend.store import InMemoryStore
 from backend.ingest import ingest_excel
@@ -18,7 +18,6 @@ from backend.plan import build_plan
 from backend.language import phrase_intervention_message, chat_response
 from backend.retain import due_topics, apply_sm2
 from backend.internships import match_internships
-from backend.models import GradeRequest, ReviewDecision
 
 app = FastAPI(
     title="Polaris API",
@@ -29,16 +28,16 @@ app = FastAPI(
 router = APIRouter(prefix="/api/v1")
 store = InMemoryStore(persist_path=os.environ.get("POLARIS_PERSIST_PATH"))
 
+
+
 def generate_plan_for_student(student: StudentState) -> Plan:
     risk_state = calculate_risk(student)
     student.risk = risk_state
     student.predictions = predict_trends(student)
     active_interventions = evaluate_interventions(student, risk_state)
     plan = build_plan(student, risk_state, active_interventions)
-    message, used_llm = phrase_intervention_message(student, plan)
-    plan.message = message
+    plan.message = phrase_intervention_message(student, plan)
     return plan
-
 
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
@@ -251,7 +250,7 @@ async def complete_student_task(student_id: str, task_id: str):
     }
 
 @router.post("/interventions/{intervention_id}/review")
-async def review_intervention(intervention_id: str, payload: ReviewDecision):
+async def review_intervention(intervention_id: str, payload: ReviewRequest):
     parts = intervention_id.split(":")
     if len(parts) < 2:
         raise HTTPException(status_code=400, detail="Invalid intervention ID format.")

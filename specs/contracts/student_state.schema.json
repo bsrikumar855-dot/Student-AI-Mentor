@@ -110,7 +110,7 @@
           "type": "object",
           "properties": {
             "score": {
-              "type": "number"
+              "type": "integer"
             },
             "level": {
               "type": "string",

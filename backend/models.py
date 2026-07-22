@@ -29,7 +29,7 @@ class RiskComponents(BaseModel):
     trend: float
 
 class RiskResult(BaseModel):
-    score: float
+    score: int
     level: Literal["Low", "Medium", "High"]
     reasons: List[str]
     components: RiskComponents
@@ -108,6 +108,6 @@ class ChatRequest(BaseModel):
 class GradeRequest(BaseModel):
     quality: int = Field(..., ge=0, le=5)
 
-class ReviewDecision(BaseModel):
+class ReviewRequest(BaseModel):
     decision: str = Field(..., pattern="^(approve|override)$")
     note: Optional[str] = None
