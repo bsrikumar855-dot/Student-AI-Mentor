@@ -53,7 +53,7 @@
   ],
   "skills": ["Python", "SQL", "Git"],
   "risk": {
-    "score": 45,
+    "score": 45.0,
     "level": "Medium",
     "reasons": ["Downward trend in Database Systems", "Low exam completion in Database Systems"],
     "components": {
@@ -72,7 +72,7 @@
         "subject": "Data Structures",
         "projected_score": 75.0,
         "fail_risk": "Low",
-        "why": "Data Structures: 79% now, +7/wk -> ~75% at exam"
+        "why": "Consistent performance"
       }
     ],
     "computed_at": "2026-07-22T05:32:00Z"

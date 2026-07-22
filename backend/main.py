@@ -18,6 +18,7 @@ from backend.plan import build_plan
 from backend.language import phrase_intervention_message, chat_response
 from backend.retain import due_topics, apply_sm2
 from backend.internships import match_internships
+from backend.models import GradeRequest, ReviewDecision
 
 app = FastAPI(
     title="Polaris API",
@@ -28,21 +29,16 @@ app = FastAPI(
 router = APIRouter(prefix="/api/v1")
 store = InMemoryStore(persist_path=os.environ.get("POLARIS_PERSIST_PATH"))
 
-class GradeRequest(BaseModel):
-    quality: int = Field(..., ge=0, le=5)
-
-class ReviewRequest(BaseModel):
-    decision: str = Field(..., pattern="^(approve|override)$")
-    note: Optional[str] = None
-
 def generate_plan_for_student(student: StudentState) -> Plan:
     risk_state = calculate_risk(student)
     student.risk = risk_state
     student.predictions = predict_trends(student)
     active_interventions = evaluate_interventions(student, risk_state)
     plan = build_plan(student, risk_state, active_interventions)
-    plan.message = phrase_intervention_message(student, plan)
+    message, used_llm = phrase_intervention_message(student, plan)
+    plan.message = message
     return plan
+
 
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
@@ -255,7 +251,7 @@ async def complete_student_task(student_id: str, task_id: str):
     }
 
 @router.post("/interventions/{intervention_id}/review")
-async def review_intervention(intervention_id: str, payload: ReviewRequest):
+async def review_intervention(intervention_id: str, payload: ReviewDecision):
     parts = intervention_id.split(":")
     if len(parts) < 2:
         raise HTTPException(status_code=400, detail="Invalid intervention ID format.")
@@ -299,8 +295,8 @@ async def review_intervention(intervention_id: str, payload: ReviewRequest):
 
 @router.post("/chat")
 async def chat_endpoint(payload: ChatRequest):
-    reply = chat_response(payload.message, payload.history)
-    return {"reply": reply, "used_llm": False}
+    reply, used_llm = chat_response(payload.message, payload.history)
+    return {"reply": reply, "used_llm": used_llm}
 
 
 app.include_router(router)

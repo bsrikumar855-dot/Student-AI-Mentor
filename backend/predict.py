@@ -18,7 +18,10 @@ def predict_trends(student: StudentState) -> PredictionResult:
     slopes = []
 
     exam_map = {e.subject: e for e in student.exams}
-    d = (student.nearest_exam.days_to_exam if student.nearest_exam else 0) or 14
+    d = student.nearest_exam.days_to_exam if student.nearest_exam else 14
+    if d == 0:
+        d = 14
+
 
     for s in student.subjects:
         if len(s.trend) >= 2:
@@ -29,9 +32,15 @@ def predict_trends(student: StudentState) -> PredictionResult:
         slopes.append(slope)
         projected = clamp(s.latest + slope * (d / 7.0), 0.0, 100.0)
         projected_scores.append(projected)
-
-        fail_risk = "High" if projected < 40 else "Medium" if projected < 55 else "Low"
-        why = f"{s.name}: {s.latest:.0f}% now, {'+' if slope >= 0 else ''}{slope:.0f}/wk -> ~{projected:.0f}% at exam"
+        
+        if projected < 40:
+            fail_risk = "High"
+        elif projected < 55:
+            fail_risk = "Medium"
+        else:
+            fail_risk = "Low"
+            
+        why = f"{s.name}: {s.latest:.0f}% now, {'+' if slope>=0 else ''}{slope:.0f}/wk -> ~{projected:.0f}% at exam"
         
         exam_forecast.append(ExamForecast(
             subject=s.name,

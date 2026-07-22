@@ -267,8 +267,9 @@ def test_language_phrase_fallback():
         ],
         generated_at="2026-07-22T10:00:00Z"
     )
-    msg = phrase_intervention_message(student, plan)
+    msg, used_llm = phrase_intervention_message(student, plan)
     assert "inactive for 5 days" in msg
+
 
 def test_evaluate_interventions_behavior():
     from datetime import datetime
@@ -308,4 +309,22 @@ def test_evaluate_interventions_behavior():
     assert "recovery_plan" in actions
     assert "internship_match" in actions
 
-
+def test_risk_golden_file_behavior():
+    import json
+    from backend.models import StudentState
+    from backend.risk import calculate_risk
+    
+    with open("mocks/student_state.json", "r") as f:
+        data = json.load(f)
+        
+    student = StudentState(**data)
+    res = calculate_risk(student)
+    
+    assert res.score == 18.4
+    assert res.level == "Low"
+    assert res.components.score_gap == pytest.approx(0.06666, abs=1e-4)
+    assert res.components.syllabus_behind == pytest.approx(0.28, abs=1e-2)
+    assert res.components.activity_recency == pytest.approx(0.2857, abs=1e-4)
+    assert res.components.trend == pytest.approx(0.1285, abs=1e-4)
+    assert "Low — Student has been inactive for 2 days." in res.reasons
+    assert "Syllabus completion is low (60.0%) for nearest exam in Data Structures." in res.reasons
