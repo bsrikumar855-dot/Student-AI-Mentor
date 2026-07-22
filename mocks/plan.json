@@ -1,0 +1,39 @@
+{
+  "student_id": "STU1001",
+  "intervention_triggered": "Academic Performance Drop",
+  "message": "Hi Alice, let's focus on database systems study today due to the recent low test score.",
+  "daily_targets": [
+    {
+      "id": "T1",
+      "task": "Review SQL normalization rules",
+      "why": "Your database systems score has dropped to 52.0.",
+      "kind": "review",
+      "done": false
+    },
+    {
+      "id": "T2",
+      "task": "Complete assignment 3 practice",
+      "why": "Database Systems exam is in 14 days and current completion is only 30%.",
+      "kind": "practice",
+      "done": false
+    }
+  ],
+  "schedule": [
+    {
+      "slot": "09:00 - 10:30",
+      "task": "Review SQL normalization rules"
+    },
+    {
+      "slot": "14:00 - 16:00",
+      "task": "Complete assignment 3 practice"
+    }
+  ],
+  "interventions": [
+    {
+      "action": "Schedule peer tutoring",
+      "why": "Continuous downward score trend in Database Systems.",
+      "kind": "academic",
+      "auto": true
+    }
+  ]
+}

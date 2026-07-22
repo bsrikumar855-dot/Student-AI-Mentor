@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StudentState",
+  "type": "object",
+  "properties": {
+    "student_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "cgpa": {
+      "type": "number"
+    },
+    "attendance": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "subjects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "latest": {
+            "type": "number"
+          },
+          "trend": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "flag": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["name", "latest", "trend", "flag"]
+      }
+    },
+    "exams": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Exam"
+      }
+    },
+    "nearest_exam": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/Exam"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "days_since_active": {
+      "type": "integer"
+    },
+    "days_since_commit": {
+      "type": "integer"
+    },
+    "days_since_linkedin": {
+      "type": "integer"
+    },
+    "goals_met_streak": {
+      "type": "integer"
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "learned_on": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ef": {
+            "type": "number"
+          },
+          "reps": {
+            "type": "integer"
+          },
+          "interval": {
+            "type": "integer"
+          },
+          "next_review": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["topic", "learned_on", "ef", "reps", "interval", "next_review"]
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risk": {
+      "type": ["object", "null"]
+    },
+    "predictions": {
+      "type": ["object", "null"]
+    }
+  },
+  "required": [
+    "student_id",
+    "name",
+    "cgpa",
+    "attendance",
+    "subjects",
+    "exams",
+    "nearest_exam",
+    "days_since_active",
+    "days_since_commit",
+    "days_since_linkedin",
+    "goals_met_streak",
+    "topics",
+    "skills",
+    "risk",
+    "predictions"
+  ],
+  "definitions": {
+    "Exam": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "days_to_exam": {
+          "type": "integer"
+        },
+        "completion": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        }
+      },
+      "required": ["subject", "date", "days_to_exam", "completion"]
+    }
+  }
+}

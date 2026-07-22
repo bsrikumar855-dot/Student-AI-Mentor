@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plan",
+  "type": "object",
+  "properties": {
+    "student_id": {
+      "type": "string"
+    },
+    "intervention_triggered": {
+      "type": ["string", "null"]
+    },
+    "message": {
+      "type": "string"
+    },
+    "daily_targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "done": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "task", "why", "kind", "done"]
+      }
+    },
+    "schedule": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "slot": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          }
+        },
+        "required": ["slot", "task"]
+      }
+    },
+    "interventions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "auto": {
+            "type": "boolean"
+          }
+        },
+        "required": ["action", "why", "kind", "auto"]
+      }
+    }
+  },
+  "required": [
+    "student_id",
+    "intervention_triggered",
+    "message",
+    "daily_targets",
+    "schedule",
+    "interventions"
+  ]
+}

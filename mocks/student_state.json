@@ -1,0 +1,64 @@
+{
+  "student_id": "STU1001",
+  "name": "Alice Smith",
+  "cgpa": 3.4,
+  "attendance": 0.85,
+  "subjects": [
+    {
+      "name": "Data Structures",
+      "latest": 78.5,
+      "trend": [65.0, 72.0, 78.5],
+      "flag": null
+    },
+    {
+      "name": "Database Systems",
+      "latest": 52.0,
+      "trend": [70.0, 60.0, 52.0],
+      "flag": "Warning: Downward Trend"
+    }
+  ],
+  "exams": [
+    {
+      "subject": "Data Structures",
+      "date": "2026-08-01T09:00:00Z",
+      "days_to_exam": 10,
+      "completion": 0.6
+    },
+    {
+      "subject": "Database Systems",
+      "date": "2026-08-05T14:00:00Z",
+      "days_to_exam": 14,
+      "completion": 0.3
+    }
+  ],
+  "nearest_exam": {
+    "subject": "Data Structures",
+    "date": "2026-08-01T09:00:00Z",
+    "days_to_exam": 10,
+    "completion": 0.6
+  },
+  "days_since_active": 2,
+  "days_since_commit": 4,
+  "days_since_linkedin": 15,
+  "goals_met_streak": 5,
+  "topics": [
+    {
+      "topic": "Binary Search Trees",
+      "learned_on": "2026-07-15T10:00:00Z",
+      "ef": 2.5,
+      "reps": 2,
+      "interval": 4,
+      "next_review": "2026-07-25T10:00:00Z"
+    }
+  ],
+  "skills": ["Python", "SQL", "Git"],
+  "risk": {
+    "score": 45.0,
+    "level": "Medium",
+    "reasons": ["Downward trend in Database Systems", "Low exam completion in Database Systems"]
+  },
+  "predictions": {
+    "projected_gpa": 3.25,
+    "exam_trend": "stable"
+  }
+}
