@@ -363,7 +363,8 @@ async def demo_drift_hero():
     plan = generate_plan_for_student(student)
     store.save_student(student)
     store.save_plan("STU_HERO", plan)
-    store.dump_json()
+    if getattr(store, "persist_path", None):
+        store.dump_json(store.persist_path)
     return {"success": True}
 
 @router.post("/demo/reset")
@@ -392,7 +393,8 @@ async def demo_reset():
         plan = generate_plan_for_student(student)
         store.save_plan(student.student_id, plan)
         
-    store.dump_json()
+    if getattr(store, "persist_path", None):
+        store.dump_json(store.persist_path)
     return {"success": True}
 
 app.include_router(router)
