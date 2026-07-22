@@ -1,6 +1,6 @@
-# Polaris Project Specification (Phase 2 Refined)
+# Drishta Project Specification (Phase 2 Refined)
 
-Polaris is a proactive AI student mentor designed to ingest LMS data, score academic risk, plan daily study schedules, track progress, and intervene when a student drifts. It runs a deterministic decision core with a separate natural language layer.
+Drishta is a proactive AI student mentor designed to ingest LMS data, score academic risk, plan daily study schedules, track progress, and intervene when a student drifts. It runs a deterministic decision core with a separate natural language layer.
 
 ---
 
@@ -33,7 +33,7 @@ Polaris is a proactive AI student mentor designed to ingest LMS data, score acad
   - `trend = mean over subjects (len >= 2, trend[0] > 0) of max(0, (trend[0] - trend[-1]) / trend[0])`
   - `WEIGHTS = score_gap: 0.35, syllabus_behind: 0.25, activity_recency: 0.25, trend: 0.15`
   - `score = round(sum(weight * term) * 100)`
-  - `level = Low (<33) / Medium (<66) / High (>=66)`
+  - `level = High (>=45) / Medium (>=25) / Low (otherwise)`
   - `dominant = name of term with the highest weight * term value`
   - `reasons[0] = "{level} — {human detail for the dominant term, citing real data}"`
   - Add secondary reasons for any other term whose contribution is within 20% of dominant.

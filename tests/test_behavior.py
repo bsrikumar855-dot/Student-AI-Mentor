@@ -420,6 +420,7 @@ def test_cohort_realism_and_transition():
     aisha.days_since_active = 8
     aisha.nearest_exam.days_to_exam = 5
     aisha.nearest_exam.completion = 0.45
+    aisha.exams[0].days_to_exam = 5
     
     new_risk = calculate_risk(aisha)
     assert new_risk.level == "High"
@@ -430,9 +431,9 @@ def test_cohort_realism_and_transition():
     assert "flag_at_risk" in actions
 
 def test_chat_response_fallback():
-    reply, used_llm = chat_response("Hello Polaris", [], api_key=None)
+    reply, used_llm = chat_response("Hello Drishta", [], api_key=None)
     assert not used_llm
-    assert "Polaris Mentor: I received your message: 'Hello Polaris'." in reply
+    assert "Drishta Mentor: I received your message: 'Hello Drishta'." in reply
 
 def test_chat_response_exception_safety(monkeypatch):
     # Monkeypatch the LLM client to raise so no real network call is made.
@@ -448,8 +449,8 @@ def test_chat_response_exception_safety(monkeypatch):
     monkeypatch.setattr(genai, "GenerativeModel", _RaisingModel)
     monkeypatch.setattr(genai, "configure", lambda **kw: None)
 
-    reply, used_llm = chat_response("Hello Polaris", [], api_key="FAKE_KEY_TRIGGERS_LLM_PATH")
+    reply, used_llm = chat_response("Hello Drishta", [], api_key="FAKE_KEY_TRIGGERS_LLM_PATH")
     assert not used_llm
-    assert "Polaris Mentor: I received your message: 'Hello Polaris'." in reply
+    assert "Drishta Mentor: I received your message: 'Hello Drishta'." in reply
 
 

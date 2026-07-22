@@ -28,24 +28,47 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         "skills": "python,git,sql"
     })
     
-    # Generate 20 students with explicit bands
-    # STU1001-STU1004: High Risk (>= 45)
-    # STU1005-STU1009: Medium Risk (25-45)
-    # STU1010-STU1020: Low Risk (< 25)
-    for i in range(1, num_students + 1):
+    # High-risk students: distinct names and slightly varied inputs so scores differ
+    HIGH_RISK = [
+        {
+            "student_id": "STU1001", "name": "Rohan Mehta",
+            "cgpa": 5.9, "attendance": 0.68,
+            "days_since_active": 9, "days_since_commit": 14,
+            "days_since_linkedin": 18, "goals_met_streak": 0,
+            "skills": "python"
+        },
+        {
+            "student_id": "STU1002", "name": "Priya Sharma",
+            "cgpa": 6.2, "attendance": 0.71,
+            "days_since_active": 8, "days_since_commit": 12,
+            "days_since_linkedin": 16, "goals_met_streak": 0,
+            "skills": "java"
+        },
+        {
+            "student_id": "STU1003", "name": "Arjun Nair",
+            "cgpa": 5.7, "attendance": 0.65,
+            "days_since_active": 10, "days_since_commit": 15,
+            "days_since_linkedin": 21, "goals_met_streak": 0,
+            "skills": "c++"
+        },
+        {
+            "student_id": "STU1004", "name": "Fatima Khan",
+            "cgpa": 6.4, "attendance": 0.74,
+            "days_since_active": 7, "days_since_commit": 11,
+            "days_since_linkedin": 14, "goals_met_streak": 0,
+            "skills": "python,sql"
+        },
+    ]
+    students.extend(HIGH_RISK)
+
+    # Generate remaining students (indices 5-20) with explicit bands
+    # STU1005-STU1009: Medium Risk (25-44)
+    # STU1010-STU1020: Low Risk (<25)
+    for i in range(5, num_students + 1):
         sid = f"STU{1000+i}"
         name = f"Student {i}"
-        
-        if i <= 4:
-            # High Risk
-            cgpa = 6.1
-            attendance = 0.72
-            days_since_active = 8
-            days_since_commit = 12
-            days_since_linkedin = 15
-            goals_met_streak = 0
-            skills = "python"
-        elif i <= 9:
+
+        if i <= 9:
             # Medium Risk
             cgpa = 7.2
             attendance = 0.82
@@ -63,7 +86,7 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
             days_since_linkedin = 0
             goals_met_streak = 5
             skills = "python,git,sql"
-            
+
         students.append({
             "student_id": sid,
             "name": name,
@@ -89,24 +112,34 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
     scores.append({"student_id": "STU_HERO", "subject": "DSA", "test_no": 2, "score": 65.0})
     scores.append({"student_id": "STU_HERO", "subject": "DSA", "test_no": 3, "score": 42.0})
     
-    # Other students scores
-    for i in range(1, num_students + 1):
+    # High-risk student scores: each with a distinct declining profile
+    HIGH_RISK_SCORES = [
+        # STU1001 Rohan Mehta: steep Python decline
+        ("STU1001", "Python", [62.0, 45.0, 28.0]),
+        ("STU1001", "DSA",    [68.0, 50.0, 33.0]),
+        # STU1002 Priya Sharma: moderate decline
+        ("STU1002", "Python", [65.0, 52.0, 38.0]),
+        ("STU1002", "DSA",    [70.0, 55.0, 40.0]),
+        # STU1003 Arjun Nair: very steep decline
+        ("STU1003", "Python", [58.0, 40.0, 22.0]),
+        ("STU1003", "DSA",    [64.0, 46.0, 30.0]),
+        # STU1004 Fatima Khan: moderate but consistent decline
+        ("STU1004", "Python", [67.0, 55.0, 42.0]),
+        ("STU1004", "DSA",    [72.0, 58.0, 44.0]),
+    ]
+    for sid, subject, test_scores in HIGH_RISK_SCORES:
+        for test_no, score in enumerate(test_scores, start=1):
+            scores.append({"student_id": sid, "subject": subject, "test_no": test_no, "score": score})
+
+    # Other students scores (Medium and Low)
+    for i in range(5, num_students + 1):
         sid = f"STU{1000+i}"
-        if i <= 4:
-            # High Risk scores: very low, declining
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 65.0})
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 48.0})
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 3, "score": 30.0})
-            
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 70.0})
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 50.0})
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 3, "score": 35.0})
-        elif i <= 9:
+        if i <= 9:
             # Medium Risk scores: some decline
             scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 75.0})
             scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 70.0})
             scores.append({"student_id": sid, "subject": "Python", "test_no": 3, "score": 55.0})
-            
+
             scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 72.0})
             scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 75.0})
             scores.append({"student_id": sid, "subject": "DSA", "test_no": 3, "score": 70.0})
@@ -115,13 +148,13 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
             scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 85.0})
             scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 88.0})
             scores.append({"student_id": sid, "subject": "Python", "test_no": 3, "score": 90.0})
-            
+
             scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 82.0})
             scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 85.0})
             scores.append({"student_id": sid, "subject": "DSA", "test_no": 3, "score": 88.0})
-            
+
     df_scores = pd.DataFrame(scores)
-    
+
     # 3. Exams sheet
     exams = []
     # Hero exams
@@ -133,19 +166,26 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         "completion": 0.45
     })
     
-    # Other students exams
-    for i in range(1, num_students + 1):
+    # High-risk student exams: varied completion rates
+    HIGH_RISK_EXAMS = [
+        ("STU1001", 4,  0.15),  # Rohan: 4 days, 15% done
+        ("STU1002", 6,  0.20),  # Priya: 6 days, 20% done
+        ("STU1003", 3,  0.10),  # Arjun: 3 days, 10% done
+        ("STU1004", 5,  0.25),  # Fatima: 5 days, 25% done
+    ]
+    for sid, days, completion in HIGH_RISK_EXAMS:
+        exams.append({
+            "student_id": sid,
+            "subject": "DSA",
+            "date": (datetime.now() + timedelta(days=days)).isoformat(),
+            "days_to_exam": days,
+            "completion": completion
+        })
+
+    # Other students exams (Medium and Low)
+    for i in range(5, num_students + 1):
         sid = f"STU{1000+i}"
-        if i <= 4:
-            # High Risk exams: close by, low completion
-            exams.append({
-                "student_id": sid,
-                "subject": "DSA",
-                "date": (datetime.now() + timedelta(days=5)).isoformat(),
-                "days_to_exam": 5,
-                "completion": 0.2
-            })
-        elif i <= 9:
+        if i <= 9:
             exams.append({
                 "student_id": sid,
                 "subject": "DSA",
@@ -176,8 +216,19 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         "next_review": (datetime.now() - timedelta(days=5)).isoformat()
     })
     
-    # Other students topics
-    for i in range(1, num_students + 1):
+    # Other students topics (STU1001-1004 + medium/low)
+    HIGH_RISK_SIDS = ["STU1001", "STU1002", "STU1003", "STU1004"]
+    for j, sid in enumerate(HIGH_RISK_SIDS):
+        topics.append({
+            "student_id": sid,
+            "topic": "Sorting" if j % 2 == 0 else "Trees",
+            "learned_on": (datetime.now() - timedelta(days=5)).isoformat(),
+            "ef": 2.5,
+            "reps": 1,
+            "interval": 2,
+            "next_review": (datetime.now() + timedelta(days=2)).isoformat()
+        })
+    for i in range(5, num_students + 1):
         sid = f"STU{1000+i}"
         topics.append({
             "student_id": sid,
