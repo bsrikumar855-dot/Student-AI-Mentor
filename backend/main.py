@@ -294,8 +294,8 @@ async def review_intervention(intervention_id: str, payload: ReviewRequest):
 
 @router.post("/chat")
 async def chat_endpoint(payload: ChatRequest):
-    reply = chat_response(payload.message, payload.history)
-    return {"reply": reply, "used_llm": False}
+    reply, used_llm = chat_response(payload.message, payload.history)
+    return {"reply": reply, "used_llm": used_llm}
 
 
 app.include_router(router)
