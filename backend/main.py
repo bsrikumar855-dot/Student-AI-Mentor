@@ -1,8 +1,11 @@
-from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query
+from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query, Security, Depends
+from fastapi.security import APIKeyHeader
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import json
 import os
+import logging
+import io
 
 from backend.models import (
     StudentState, Plan,
@@ -21,8 +24,16 @@ from backend.language import phrase_intervention_message, chat_response
 from backend.retain import due_topics, apply_sm2
 from backend.internships import match_internships
 from backend.coding import get_codeforces
+from backend.rate_limit import chat_limiter, ingest_limiter, api_limiter
 
 from fastapi.middleware.cors import CORSMiddleware
+
+# Logging Configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("drishta")
 
 app = FastAPI(
     title="Drishta API",
@@ -30,17 +41,47 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS Setup
+cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+if cors_origins_env:
+    origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+else:
+    origins = ["http://localhost:5173", "http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-router = APIRouter(prefix="/api/v1")
+# Authentication Setup
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+def verify_api_key(api_key: Optional[str] = Depends(api_key_header)):
+    expected_key = os.environ.get("DRISHTA_API_KEY", "drishta_secret_key")
+    if not api_key or api_key != expected_key:
+        logger.warning("Authentication failed or key missing")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    return api_key
+
+def check_demo_allowed():
+    if not os.environ.get("ALLOW_DEMO_ENDPOINTS", "true").lower() == "true":
+        logger.warning("Access to demo endpoint denied (disabled in env)")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo endpoints are disabled in this environment."
+        )
+
+# Router configuration with global API Key authentication and general API rate limiting
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_api_key), Depends(api_limiter)])
 store = InMemoryStore(persist_path=os.environ.get("POLARIS_PERSIST_PATH"))
 platform_links = PlatformLinkStore()
-
 
 
 def generate_plan_for_student(student: StudentState) -> Plan:
@@ -84,11 +125,37 @@ def generate_plan_for_student(student: StudentState) -> Plan:
 
     return plan
 
-@router.post("/ingest", status_code=status.HTTP_201_CREATED)
+@router.post("/ingest", status_code=status.HTTP_201_CREATED, dependencies=[Depends(ingest_limiter)])
 async def ingest_cohort(file: UploadFile):
+    # Enforce size limit (max 10MB)
+    content_length = file.headers.get("content-length")
+    if content_length and int(content_length) > 10 * 1024 * 1024:
+        logger.warning(f"File size exceeded content-length check: {content_length} bytes")
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File too large. Maximum size is 10MB."
+        )
+    
+    max_size = 10 * 1024 * 1024
+    size = 0
+    content = bytearray()
+    while True:
+        chunk = await file.read(65536)
+        if not chunk:
+            break
+        size += len(chunk)
+        if size > max_size:
+            logger.warning(f"File size exceeded chunk-reading check: {size} bytes")
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="File too large. Maximum size is 10MB."
+            )
+        content.extend(chunk)
+
     try:
-        students, ingest_skipped = ingest_excel(file.file)
+        students, ingest_skipped = ingest_excel(io.BytesIO(content))
     except Exception as e:
+        logger.exception("Failed to parse Excel file during ingestion")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to parse Excel file: {str(e)}"
@@ -98,7 +165,6 @@ async def ingest_cohort(file: UploadFile):
     duplicate_skipped = []
 
     for student in students:
-        # Check idempotency on student_id
         if store.get_student(student.student_id) is not None:
             duplicate_skipped.append(student.student_id)
             continue
@@ -109,6 +175,7 @@ async def ingest_cohort(file: UploadFile):
         store.save_plan(student.student_id, plan)
         ingested_ids.append(student.student_id)
 
+    logger.info(f"Ingested {len(ingested_ids)} students successfully")
     return {
         "ingested": len(ingested_ids),
         "student_ids": ingested_ids,
@@ -120,8 +187,8 @@ async def ingest_cohort(file: UploadFile):
 
 @router.get("/students")
 async def list_students(
-    band: Optional[str] = Query(None, regex="^(Low|Medium|High)$"),
-    sort: Optional[str] = Query(None, regex="^(risk_desc)$"),
+    band: Optional[str] = Query(None, pattern="^(Low|Medium|High)$"),
+    sort: Optional[str] = Query(None, pattern="^(risk_desc)$"),
     limit: Optional[int] = Query(None, ge=1),
     offset: Optional[int] = Query(0, ge=0)
 ):
@@ -216,7 +283,7 @@ async def get_student_internships(student_id: str):
             with open(db_path, "r") as f:
                 internships_db = json.load(f)
         except Exception:
-            pass
+            logger.exception("Failed to load internships json file")
             
     return match_internships(student.skills, student.cgpa, internships_db)
 
@@ -237,7 +304,7 @@ async def get_student_coding(student_id: str):
     return {"codeforces": profile}
 
 @router.get("/students/{student_id}/reviews")
-async def get_student_reviews(student_id: str, due: Optional[str] = Query(None, regex="^(today|all)$")):
+async def get_student_reviews(student_id: str, due: Optional[str] = Query(None, pattern="^(today|all)$")):
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
@@ -246,8 +313,6 @@ async def get_student_reviews(student_id: str, due: Optional[str] = Query(None, 
     
     if due == "today":
         today_dt = datetime.now()
-        # Filter down by next review <= today
-        # Note: retain.due_topics output dictionary has 'next_review' key as datetime
         filtered = [t for t in all_due if t["next_review"].replace(tzinfo=None) <= today_dt.replace(tzinfo=None)]
         return filtered
         
@@ -330,7 +395,6 @@ async def review_intervention(intervention_id: str, payload: ReviewRequest):
     if not found_inter:
         raise HTTPException(status_code=404, detail="Intervention not found in student plan.")
         
-    # Validate auto: false intervention review constraint
     if found_inter.auto:
         raise HTTPException(status_code=400, detail="Only human-in-the-loop (auto: false) interventions can be reviewed.")
         
@@ -353,13 +417,18 @@ async def review_intervention(intervention_id: str, payload: ReviewRequest):
         "at": datetime.now(timezone.utc).isoformat()
     }
 
-@router.post("/chat")
+@router.post("/chat", dependencies=[Depends(chat_limiter)])
 async def chat_endpoint(payload: ChatRequest):
+    student = store.get_student(payload.student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+        
     reply, used_llm = chat_response(payload.message, payload.history)
     return {"reply": reply, "used_llm": used_llm}
 
 @router.post("/demo/drift-hero")
 async def demo_drift_hero():
+    check_demo_allowed()
     student = store.get_student("STU_HERO")
     if not student:
         raise HTTPException(status_code=404, detail="Student STU_HERO not found.")
@@ -371,7 +440,6 @@ async def demo_drift_hero():
     if student.exams:
         student.exams[0].days_to_exam = 5
         
-    # We must run collection as well so derived signals exist!
     from backend.collector import run_collection
     run_collection(store)
     
@@ -384,12 +452,10 @@ async def demo_drift_hero():
 
 @router.post("/demo/reset")
 async def demo_reset():
+    check_demo_allowed()
     # Reset store
-    store.students = {}
-    store.plans = {}
-    store.derived_signals = {}
+    store.reset()
     
-    # Re-ingest
     cohort_path = os.path.join(os.path.dirname(__file__), "data", "cohort.xlsx")
     if not os.path.exists(cohort_path):
         cohort_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend", "data", "cohort.xlsx")
@@ -412,4 +478,4 @@ async def demo_reset():
         store.dump_json(store.persist_path)
     return {"success": True}
 
-app.include_router(router)
+app.include_router(router)

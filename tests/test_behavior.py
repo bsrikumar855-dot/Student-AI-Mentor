@@ -461,22 +461,30 @@ def test_chat_response_fallback():
     assert "Drishta Mentor: I received your message: 'Hello Drishta'." in reply
 
 def test_chat_response_exception_safety(monkeypatch):
-    # Monkeypatch the LLM client to raise so no real network call is made.
+    # Monkeypatch the OpenAI client to raise so no real network call is made.
     # Verifies that used_llm is False and we get the templated fallback.
-    import google.generativeai as genai
+    from openai import OpenAI
 
-    class _RaisingModel:
-        def __init__(self, *a, **kw):
-            pass
-        def generate_content(self, *a, **kw):
+    # Set mock environment keys to trigger LLM code paths
+    monkeypatch.setenv("NVIDIA_API_KEY", "FAKE_KEY_TRIGGERS_LLM_PATH")
+    monkeypatch.setenv("GROQ_API_KEY", "FAKE_KEY_TRIGGERS_LLM_PATH")
+
+    class MockCompletions:
+        def create(self, *args, **kwargs):
             raise RuntimeError("simulated LLM failure")
 
-    monkeypatch.setattr(genai, "GenerativeModel", _RaisingModel)
-    monkeypatch.setattr(genai, "configure", lambda **kw: None)
+    class MockChat:
+        def __init__(self):
+            self.completions = MockCompletions()
+
+    # Mock client properties
+    monkeypatch.setattr(OpenAI, "__init__", lambda *args, **kwargs: None)
+    monkeypatch.setattr(OpenAI, "chat", property(lambda self: MockChat()))
 
     reply, used_llm = chat_response("Hello Drishta", [], api_key="FAKE_KEY_TRIGGERS_LLM_PATH")
     assert not used_llm
     assert "Drishta Mentor: I received your message: 'Hello Drishta'." in reply
+
 
 
 
@@ -738,7 +746,7 @@ def test_coding_endpoint_no_handle_after_revocation():
 
     client = TestClient(app)
     platform_links.revoke("STU_COD_REVOKE", "codeforces", datetime(2026, 7, 22))
-    resp = client.get("/api/v1/students/STU_COD_REVOKE/coding")
+    resp = client.get("/api/v1/students/STU_COD_REVOKE/coding", headers={"X-API-Key": "drishta_secret_key"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["codeforces"] is None
@@ -773,7 +781,8 @@ def test_ingest_writes_one_plan_decision_trace():
     client = TestClient(app)
     resp = client.post(
         "/api/v1/ingest",
-        files={"file": ("cohort.xlsx", out, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+        files={"file": ("cohort.xlsx", out, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        headers={"X-API-Key": "drishta_secret_key"}
     )
     assert resp.status_code == 201
 
@@ -781,3 +790,4 @@ def test_ingest_writes_one_plan_decision_trace():
     assert len(traces) == 1
     assert traces[0].decision_type == "plan"
     assert traces[0].explanation.config_version == "v1"
+

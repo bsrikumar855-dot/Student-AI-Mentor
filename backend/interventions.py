@@ -114,8 +114,11 @@ def evaluate_interventions(
             try:
                 with open(db_path, "r") as f:
                     internships_db = json.load(f)
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to load internships database: {e}")
                 internships_db = []
+
         else:
             internships_db = []
             

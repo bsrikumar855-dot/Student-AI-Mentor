@@ -183,9 +183,16 @@ const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms));
 const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 4000) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  
+  const headers = new Headers(options.headers || {});
+  if (!headers.has("X-API-Key")) {
+    headers.set("X-API-Key", import.meta.env.VITE_API_KEY || "drishta_secret_key");
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
+      headers,
       signal: controller.signal
     });
     clearTimeout(timer);
@@ -195,6 +202,7 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutM
     throw error;
   }
 };
+
 
 const prettyLabel = (name: string): string => {
   const map: Record<string, string> = {
