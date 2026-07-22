@@ -127,3 +127,33 @@ def test_default_construction_unchanged():
     store = InMemoryStore()
     assert store.persist_path is None
     assert store.list_students() == []
+
+def test_signal_store_persistence(tmp_path):
+    path = str(tmp_path / "signal_store.json")
+
+    store = InMemoryStore()
+    
+    # Add raw snapshot
+    store.save_raw("codeforces", "alice", {"rating": 1500}, "2026-07-22T10:00:00Z")
+    
+    # Add derived signal
+    store.save_derived("STU1", "coding_activity", True, "codeforces", "2026-07-22T10:00:00Z", 0.95, "v1")
+    
+    # Add decision trace
+    trace = {"action": "coding_nudge", "reason": "inactive > 7 days"}
+    store.append_trace(trace)
+    
+    store.dump_json(path)
+    assert os.path.exists(path)
+    
+    loaded = InMemoryStore()
+    loaded.load_json(path)
+    
+    assert loaded._raw_snapshots["codeforces|alice|2026-07-22T10:00:00Z"] == {"rating": 1500}
+    
+    derived = loaded.get_derived("STU1")
+    assert "coding_activity" in derived
+    assert derived["coding_activity"]["value"] is True
+    assert derived["coding_activity"]["source"] == "codeforces"
+    
+    assert loaded._decision_traces == [trace]

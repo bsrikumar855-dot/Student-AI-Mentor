@@ -17,6 +17,9 @@ class InMemoryStore:
         self._students: Dict[str, StudentState] = {}
         self._plans: Dict[str, Plan] = {}
         self.audit_log: List[Dict[str, Any]] = []
+        self._raw_snapshots: Dict[str, Any] = {}
+        self._derived_signals: Dict[str, Any] = {}
+        self._decision_traces: List[Any] = []
         self.persist_path = persist_path
         if self.persist_path and os.path.exists(self.persist_path):
             self.load_json(self.persist_path)
@@ -36,6 +39,32 @@ class InMemoryStore:
     def get_plan(self, student_id: str) -> Optional[Plan]:
         return self._plans.get(student_id)
 
+    def save_raw(self, source: str, entity: str, payload: dict, fetched_at: str) -> None:
+        key = f"{source}|{entity}|{fetched_at}"
+        self._raw_snapshots[key] = payload
+
+    def save_derived(self, student_id: str, signal_name: str, value: Any, source: str, fetched_at: str, confidence: float, version: str) -> None:
+        key = f"{student_id}|{signal_name}"
+        self._derived_signals[key] = {
+            "value": value,
+            "source": source,
+            "fetched_at": fetched_at,
+            "confidence": confidence,
+            "version": version
+        }
+
+    def get_derived(self, student_id: str) -> dict:
+        result = {}
+        prefix = f"{student_id}|"
+        for k, v in self._derived_signals.items():
+            if k.startswith(prefix):
+                signal_name = k[len(prefix):]
+                result[signal_name] = v
+        return result
+
+    def append_trace(self, trace: dict) -> None:
+        self._decision_traces.append(trace)
+
     def dump_json(self, path: str) -> None:
         """
         Serializes students, plans, audit log, and the coding cache to a single JSON
@@ -47,6 +76,9 @@ class InMemoryStore:
             "plans": {sid: p.model_dump(mode="json") for sid, p in self._plans.items()},
             "audit_log": self.audit_log,
             "coding_cache": dict(_coding_module._cache),
+            "raw_snapshots": self._raw_snapshots,
+            "derived_signals": self._derived_signals,
+            "decision_traces": self._decision_traces,
         }
         tmp_path = path + ".tmp"
         with open(tmp_path, "w") as f:
@@ -67,12 +99,18 @@ class InMemoryStore:
             students = {sid: StudentState(**d) for sid, d in data["students"].items()}
             plans = {sid: Plan(**d) for sid, d in data["plans"].items()}
             audit_log = data["audit_log"]
+            raw_snapshots = data.get("raw_snapshots", {})
+            derived_signals = data.get("derived_signals", {})
+            decision_traces = data.get("decision_traces", [])
         except Exception:
             # Leave existing in-memory state untouched on any failure.
             return
         self._students = students
         self._plans = plans
         self.audit_log = audit_log
+        self._raw_snapshots = raw_snapshots
+        self._derived_signals = derived_signals
+        self._decision_traces = decision_traces
         # Restore coding cache if present (missing key is not an error)
         try:
             coding_cache = data.get("coding_cache", {})
