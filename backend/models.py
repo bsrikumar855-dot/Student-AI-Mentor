@@ -27,6 +27,7 @@ class RiskComponents(BaseModel):
     syllabus_behind: float
     activity_recency: float
     trend: float
+    coding_activity: float
 
 class FeatureContribution(BaseModel):
     name: str

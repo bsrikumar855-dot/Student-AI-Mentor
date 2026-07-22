@@ -13,7 +13,7 @@ def evaluate_interventions(
     student: StudentState,
     risk_state: RiskResult,
     internships_db: Optional[List[Dict[str, Any]]] = None,
-    coding_profile: Optional[Dict[str, Any]] = None,
+    derived_signals: Optional[Dict[str, Any]] = None,
 ) -> List[Intervention]:
     """
     Evaluates risk and student metrics against predefined rules to trigger interventions.
@@ -75,15 +75,17 @@ def evaluate_interventions(
             auto=True
         ))
 
-    # 6. git_nudge: days_since_commit >= 10
-    if student.days_since_commit >= 10:
-        interventions.append(Intervention(
-            id=f"{sid}:git_nudge",
-            action="git_nudge",
-            why=f"No GitHub commits for {student.days_since_commit} days.",
-            kind="career",
-            auto=True
-        ))
+    # 6. git_nudge: THREE-STATE check on derived GitHub signal
+    if derived_signals is not None and "github_activity" in derived_signals:
+        github_val = derived_signals["github_activity"].get("value", -1)
+        if github_val >= 10:
+            interventions.append(Intervention(
+                id=f"{sid}:git_nudge",
+                action="git_nudge",
+                why=f"No GitHub commits for {github_val} days.",
+                kind="career",
+                auto=True
+            ))
 
     # 7. linkedin_nudge: days_since_linkedin >= 14
     if student.days_since_linkedin >= 14:
@@ -131,22 +133,17 @@ def evaluate_interventions(
             auto=False
         ))
 
-    # 10. coding_nudge: coding last_active_days >= 7
-    # coding_profile is a dict {handle -> {last_active_days, ...}} passed in by the caller.
-    # If absent, nudge is skipped (no live fetch inside the deterministic core).
-    if coding_profile is not None:
-        coding_handles = getattr(student, "coding_handles", {}) or {}
-        for platform, handle in coding_handles.items():
-            prof = coding_profile.get(handle)
-            if prof is not None:
-                last_active = prof.get("last_active_days", -1)
-                if isinstance(last_active, int) and last_active >= 7:
-                    interventions.append(Intervention(
-                        id=f"{sid}:coding_nudge:{platform}",
-                        action="coding_nudge",
-                        why=f"No {platform} coding activity for {last_active} days (handle: {handle}).",
-                        kind="career",
-                        auto=True
-                    ))
+    # 10. coding_nudge: coding activity >= 7
+    if derived_signals is not None and "coding_activity" in derived_signals:
+        coding_val = derived_signals["coding_activity"].get("value", -1)
+        if coding_val >= 7:
+            platform = derived_signals["coding_activity"].get("source", "unknown")
+            interventions.append(Intervention(
+                id=f"{sid}:coding_nudge:{platform}",
+                action="coding_nudge",
+                why=f"No {platform} coding activity for {coding_val} days.",
+                kind="career",
+                auto=True
+            ))
 
     return interventions

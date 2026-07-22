@@ -61,7 +61,8 @@
       "score_gap": 0.15,
       "syllabus_behind": 0.32,
       "activity_recency": 0.28,
-      "trend": 0.23
+      "trend": 0.23,
+      "coding_activity": 0.0
     },
     "computed_at": "2026-07-22T05:32:00Z",
     "confidence": 1.0,
@@ -78,23 +79,30 @@
         {
           "name": "syllabus_behind",
           "value": 0.32,
-          "weight": 0.25,
-          "contribution": 0.08,
+          "weight": 0.24,
+          "contribution": 0.0768,
           "detail": "Syllabus completion is low (30.0%) for Database Systems exam in 14 days."
         },
         {
           "name": "activity_recency",
           "value": 0.28,
-          "weight": 0.25,
-          "contribution": 0.07,
+          "weight": 0.22,
+          "contribution": 0.0616,
           "detail": "Student has been inactive for 2 days."
         },
         {
           "name": "trend",
           "value": 0.23,
-          "weight": 0.15,
-          "contribution": 0.0345,
+          "weight": 0.14,
+          "contribution": 0.0322,
           "detail": "Downward trend in Database Systems (average drop 23.0%)."
+        },
+        {
+          "name": "coding_activity",
+          "value": 0.0,
+          "weight": 0.05,
+          "contribution": 0.0,
+          "detail": "No known coding profile or activity."
         }
       ]
     }

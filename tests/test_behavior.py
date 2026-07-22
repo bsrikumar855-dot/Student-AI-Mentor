@@ -300,7 +300,7 @@ def test_evaluate_interventions_behavior():
         score=20,
         level="Low",
         reasons=["Low risk"],
-        components=RiskComponents(score_gap=0.0, syllabus_behind=0.0, activity_recency=0.0, trend=0.0),
+        components=RiskComponents(score_gap=0.0, syllabus_behind=0.0, activity_recency=0.0, trend=0.0, coding_activity=0.0),
         computed_at="2026-07-22T10:00:00Z"
     )
     db = [{"title": "Intern", "company": "Co1", "required_skills": ["python"], "min_cgpa": 6.0}]
@@ -322,18 +322,17 @@ def test_risk_golden_file_behavior():
     res = calculate_risk(student)
 
     # Per SPEC Section 2: score = round(score01 * 100) (int), bands Low<33/Medium<66/High>=66
-    assert res.score == 18
+    assert res.score == 17
     assert res.level == "Low"
     assert res.components.score_gap == pytest.approx(0.06666, abs=1e-4)
     assert res.components.syllabus_behind == pytest.approx(0.28, abs=1e-2)
     assert res.components.activity_recency == pytest.approx(0.2857, abs=1e-4)
     assert res.components.trend == pytest.approx(0.1285, abs=1e-4)
-    assert "Low — Student has been inactive for 2 days." in res.reasons
-    assert "Syllabus completion is low (60.0%) for Data Structures exam in 10 days." in res.reasons
+    assert "Low — Syllabus completion is low (60.0%) for Data Structures exam in 10 days." in res.reasons
 
     # Assert new explanation field validates and components sum roughly to the score
     assert res.explanation is not None
-    assert len(res.explanation.contributions) == 4
+    assert len(res.explanation.contributions) == 5
     total_contribution = sum(c.contribution for c in res.explanation.contributions)
     assert round(total_contribution * 100) == res.score
 
@@ -404,7 +403,9 @@ def test_cohort_realism_and_transition():
     aisha = None
     
     for s in students:
-        res = calculate_risk(s)
+        # Pass mock derived signals for Aisha (since she has a seeded coding profile in demo)
+        derived = {"coding_activity": {"value": 5, "source": "codeforces"}} if s.student_id == "STU_HERO" else None
+        res = calculate_risk(s, derived_signals=derived)
         s.risk = res
         if s.student_id == "STU_HERO":
             aisha = s
@@ -429,10 +430,11 @@ def test_cohort_realism_and_transition():
     aisha.nearest_exam.completion = 0.45
     aisha.exams[0].days_to_exam = 5
     
-    new_risk = calculate_risk(aisha)
+    aisha_derived = {"coding_activity": {"value": 5, "source": "codeforces"}}
+    new_risk = calculate_risk(aisha, derived_signals=aisha_derived)
     assert new_risk.level == "High"
     
-    interventions = evaluate_interventions(aisha, new_risk)
+    interventions = evaluate_interventions(aisha, new_risk, derived_signals=aisha_derived)
     actions = [i.action for i in interventions]
     assert "revision_timetable" in actions
     assert "flag_at_risk" in actions
@@ -617,23 +619,23 @@ def test_coding_nudge_fires_at_seven_days(monkeypatch):
         level="Low",
         reasons=["Low risk"],
         components=RiskComponents(score_gap=0.0, syllabus_behind=0.0,
-                                  activity_recency=0.0, trend=0.0),
+                                  activity_recency=0.0, trend=0.0, coding_activity=0.0),
         computed_at="2026-07-22T10:00:00Z"
     )
 
     # Exactly 7 days inactive → should fire
-    coding_profile = {"lazy_coder": {"last_active_days": 7, "rating": 1200}}
-    interventions = evaluate_interventions(student, risk_state, coding_profile=coding_profile)
+    derived = {"coding_activity": {"value": 7, "source": "codeforces"}}
+    interventions = evaluate_interventions(student, risk_state, derived_signals=derived)
     actions = [i.action for i in interventions]
     assert "coding_nudge" in actions
 
     # 6 days inactive → should NOT fire
-    coding_profile_short = {"lazy_coder": {"last_active_days": 6, "rating": 1200}}
-    interventions2 = evaluate_interventions(student, risk_state, coding_profile=coding_profile_short)
+    derived_short = {"coding_activity": {"value": 6, "source": "codeforces"}}
+    interventions2 = evaluate_interventions(student, risk_state, derived_signals=derived_short)
     actions2 = [i.action for i in interventions2]
     assert "coding_nudge" not in actions2
 
-    # No coding_profile provided → should NOT fire
-    interventions3 = evaluate_interventions(student, risk_state, coding_profile=None)
+    # No derived_signals provided → should NOT fire
+    interventions3 = evaluate_interventions(student, risk_state, derived_signals=None)
     actions3 = [i.action for i in interventions3]
     assert "coding_nudge" not in actions3

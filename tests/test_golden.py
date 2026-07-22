@@ -27,6 +27,16 @@ def test_generate_plan_golden_pipeline():
         risk=None,
         predictions=None
     )
+    from backend.main import store
+    store.save_derived(
+        student_id="GOLDEN_STU",
+        signal_name="github_activity",
+        value=12,
+        source="github",
+        fetched_at="2026-07-22T10:00:00Z",
+        confidence=1.0,
+        version="v1"
+    )
 
     plan = generate_plan_for_student(student)
 
@@ -45,7 +55,7 @@ def test_generate_plan_golden_pipeline():
     # Assert deterministic outputs match expected values
     assert student.risk is not None
     assert student.risk.level == "Medium"
-    assert student.risk.score == 42
+    assert student.risk.score == 39
 
     assert student.predictions is not None
     assert student.predictions.exam_trend == "declining"  # Math has slope -10, Physics has slope 0 -> mean slope = -5

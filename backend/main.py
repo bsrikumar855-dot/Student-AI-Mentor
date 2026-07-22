@@ -32,26 +32,34 @@ store = InMemoryStore(persist_path=os.environ.get("POLARIS_PERSIST_PATH"))
 
 
 def generate_plan_for_student(student: StudentState) -> Plan:
-    risk_state = calculate_risk(student)
+    derived_signals = store.get_derived(student.student_id)
+    
+    risk_state = calculate_risk(student, derived_signals)
     student.risk = risk_state
     student.predictions = predict_trends(student)
 
-    # Build coding profile dict {handle: profile} for any registered handles.
-    # get_codeforces falls back to seed/cache when offline — never raises.
-    coding_profile: Optional[Dict[str, Any]] = None
-    handles = student.coding_handles or {}
-    if handles:
-        coding_profile = {}
-        for platform, handle in handles.items():
-            coding_profile[handle] = get_codeforces(handle)
-
     active_interventions = evaluate_interventions(
-        student, risk_state, coding_profile=coding_profile
+        student, risk_state, derived_signals=derived_signals
     )
     plan = build_plan(student, risk_state, active_interventions)
     plan.message = phrase_intervention_message(student, plan)
+    
+    # Write DecisionTrace
+    trace_id = f"trace_{student.student_id}_{int(datetime.now(timezone.utc).timestamp())}"
+    store.append_trace({
+        "id": trace_id,
+        "tenant_id": "default",
+        "student_id": student.student_id,
+        "decision_type": "plan_generation",
+        "input_snapshot_ids": [],
+        "config_version": "v1",
+        "model_version": "v1",
+        "output": plan.model_dump(mode="json"),
+        "confidence": 1.0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
     return plan
-
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
 async def ingest_cohort(file: UploadFile):

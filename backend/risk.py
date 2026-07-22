@@ -10,13 +10,14 @@ from backend.models import StudentState, RiskResult, RiskComponents
 # Banding: High if score>=45, Medium if score>=25, else Low.
 WEIGHTS = {
     "score_gap": 0.35,
-    "syllabus_behind": 0.25,
-    "activity_recency": 0.25,
-    "trend": 0.15,
+    "syllabus_behind": 0.24,
+    "activity_recency": 0.22,
+    "trend": 0.14,
+    "coding_activity": 0.05,
 }
 TARGET = 60.0
 
-def calculate_risk(student: StudentState) -> RiskResult:
+def calculate_risk(student: StudentState, derived_signals: Optional[Dict[str, Any]] = None) -> RiskResult:
     """
     Computes a risk score and risk level for a student.
     """
@@ -43,12 +44,21 @@ def calculate_risk(student: StudentState) -> RiskResult:
         if len(s.trend) >= 2 and s.trend[0] > 0:
             trend_terms.append(max(0.0, (s.trend[0] - s.trend[-1]) / s.trend[0]))
     trend = sum(trend_terms) / len(trend_terms) if trend_terms else 0.0
+    
+    # 5. coding_activity
+    coding_activity = 0.0
+    coding_val = -1
+    if derived_signals and "coding_activity" in derived_signals:
+        coding_val = derived_signals["coding_activity"].get("value", -1)
+        if coding_val >= 0:
+            coding_activity = min(coding_val / 7.0, 1.0)
 
     components = RiskComponents(
         score_gap=score_gap,
         syllabus_behind=syllabus_behind,
         activity_recency=activity_recency,
-        trend=trend
+        trend=trend,
+        coding_activity=coding_activity
     )
 
     weighted_terms = {
@@ -56,6 +66,7 @@ def calculate_risk(student: StudentState) -> RiskResult:
         "syllabus_behind": WEIGHTS["syllabus_behind"] * syllabus_behind,
         "activity_recency": WEIGHTS["activity_recency"] * activity_recency,
         "trend": WEIGHTS["trend"] * trend,
+        "coding_activity": WEIGHTS["coding_activity"] * coding_activity,
     }
 
     score01 = sum(weighted_terms.values())
@@ -92,6 +103,10 @@ def calculate_risk(student: StudentState) -> RiskResult:
             if declining
             else f"Slight downward grade trend (average drop {trend*100:.1f}%)."
         ),
+        "coding_activity": (
+            f"No coding activity for {coding_val} days."
+            if coding_val >= 0 else "No known coding profile or activity."
+        )
     }
     
     # Build FeatureContribution objects
@@ -102,6 +117,7 @@ def calculate_risk(student: StudentState) -> RiskResult:
             "syllabus_behind": syllabus_behind,
             "activity_recency": activity_recency,
             "trend": trend,
+            "coding_activity": coding_activity,
         }[term]
         
         contributions.append(FeatureContribution(
