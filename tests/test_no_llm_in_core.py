@@ -12,6 +12,10 @@ DETERMINISTIC_CORE_FILES = [
     "backend/store.py",
     "backend/plan.py",
     "backend/coding.py",
+    "backend/adapters/__init__.py",
+    "backend/adapters/codeforces.py",
+    "backend/normalize.py",
+    "backend/collector.py",
 ]
 
 LLM_MODULES = {
