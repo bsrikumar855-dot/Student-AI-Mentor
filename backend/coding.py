@@ -64,7 +64,9 @@ def _fetch_user_info(handle: str, timeout: int = 4) -> Dict[str, Any]:
     Returns the first user object from the result list.
     Raises on any error (caller handles it).
     """
-    url = f"https://codeforces.com/api/user.info?handles={handle}"
+    import urllib.parse
+    quoted_handle = urllib.parse.quote(handle)
+    url = f"https://codeforces.com/api/user.info?handles={quoted_handle}"
     with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310
         data = json.loads(resp.read().decode("utf-8"))
     if data.get("status") != "OK":
@@ -77,7 +79,9 @@ def _fetch_solved_count(handle: str, timeout: int = 4) -> int:
     Call Codeforces user.status and count submissions with verdict=OK (distinct problems).
     Raises on any error (caller handles it).
     """
-    url = f"https://codeforces.com/api/user.status?handle={handle}&from=1&count=1000"
+    import urllib.parse
+    quoted_handle = urllib.parse.quote(handle)
+    url = f"https://codeforces.com/api/user.status?handle={quoted_handle}&from=1&count=1000"
     with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310
         data = json.loads(resp.read().decode("utf-8"))
     if data.get("status") != "OK":
@@ -130,7 +134,9 @@ def get_codeforces(handle: str) -> Dict[str, Any]:
         _cache[key] = profile
         return profile
 
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to fetch Codeforces data for {handle}, falling back to cache/seed: {e}")
         # Try in-memory cache
         if key in _cache:
             cached = dict(_cache[key])
@@ -139,3 +145,4 @@ def get_codeforces(handle: str) -> Dict[str, Any]:
 
         # Fall through to seed
         return _seed_for(handle)
+

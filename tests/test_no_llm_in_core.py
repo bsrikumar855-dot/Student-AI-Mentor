@@ -25,6 +25,9 @@ LLM_MODULES = {
     "anthropic",
     "google.generativeai",
     "google-generativeai",
+    "google.genai",
+    "google-genai",
+
     "langchain",
     "transformers",
     "cohere",
@@ -33,6 +36,7 @@ LLM_MODULES = {
     "backend.language",
     "language",
 }
+
 
 def get_imports(file_path):
     with open(file_path, "r", encoding="utf-8") as f:

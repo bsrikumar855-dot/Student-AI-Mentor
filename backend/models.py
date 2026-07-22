@@ -181,10 +181,15 @@ class PolicyConfig(BaseModel):
         "activity_recency": 0.25, "trend": 0.15, "coding_activity": 0.01,
     }
 
+class HistoryItem(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant|mentor)$")
+    content: str = Field(..., max_length=2000)
+
 class ChatRequest(BaseModel):
     student_id: str
-    message: str
-    history: List[Dict[str, Any]] = []
+    message: str = Field(..., max_length=2000)
+    history: List[HistoryItem] = Field(default_factory=list, max_length=50)
+
 
 class GradeRequest(BaseModel):
     quality: int = Field(..., ge=0, le=5)

@@ -11,12 +11,16 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const token = localStorage.getItem('drishta_auth_token');
 
   const headers = new Headers(init.headers);
+  if (!headers.has('X-API-Key')) {
+    headers.set('X-API-Key', import.meta.env.VITE_API_KEY || 'drishta_secret_key');
+  }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
   if (!(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
+
 
   // Handle mock auth/login directly
   if (path === '/auth/login') {
