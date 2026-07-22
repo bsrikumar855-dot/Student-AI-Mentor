@@ -2,23 +2,13 @@
 Risk Scoring Module: Compute a deterministic risk score using weighted factors like attendance, grade trends, and activity.
 """
 
-from typing import Dict, Any
-from backend.models import StudentState
+from typing import Dict, Any, List
+from datetime import datetime, timezone
+from backend.models import StudentState, RiskResult, RiskComponents
 
-def calculate_risk(student: StudentState) -> Dict[str, Any]:
+def calculate_risk(student: StudentState) -> RiskResult:
     """
     Computes a risk score and risk level for a student.
-    Formula:
-      TARGET = 60
-      score_gap = mean over subjects of max(0, (TARGET - latest) / TARGET)
-      syllabus_behind = nearest_exam ? (1 - completion) * min(7 / max(days_to_exam, 1), 1) : 0
-      activity_recency = min(days_since_active / 7, 1)
-      trend = mean over subjects (len>=2, trend[0]>0) of max(0, (trend[0] - trend[-1]) / trend[0])
-      WEIGHTS = score_gap .35, syllabus_behind .25, activity_recency .25, trend .15
-      score01 = Σ weight*term ; score = round(score01*100)
-      level = Low (<33) / Medium (<66) / High (>=66)
-      dominant = argmax(weight*term)
-      reason = "{level} — {human detail for the dominant term, citing real data}"
     """
     TARGET = 60.0
     
@@ -46,13 +36,12 @@ def calculate_risk(student: StudentState) -> Dict[str, Any]:
             trend_terms.append(max(0.0, (s.trend[0] - s.trend[-1]) / s.trend[0]))
     trend = sum(trend_terms) / len(trend_terms) if trend_terms else 0.0
 
-    # Weighted terms
-    contributions = {
-        "score_gap": score_gap,
-        "syllabus_behind": syllabus_behind,
-        "activity_recency": activity_recency,
-        "trend": trend
-    }
+    components = RiskComponents(
+        score_gap=score_gap,
+        syllabus_behind=syllabus_behind,
+        activity_recency=activity_recency,
+        trend=trend
+    )
     
     weights = {
         "score_gap": 0.35,
@@ -61,7 +50,13 @@ def calculate_risk(student: StudentState) -> Dict[str, Any]:
         "trend": 0.15
     }
 
-    weighted_terms = {term: weights[term] * val for term, val in contributions.items()}
+    weighted_terms = {
+        "score_gap": weights["score_gap"] * score_gap,
+        "syllabus_behind": weights["syllabus_behind"] * syllabus_behind,
+        "activity_recency": weights["activity_recency"] * activity_recency,
+        "trend": weights["trend"] * trend
+    }
+    
     score01 = sum(weighted_terms.values())
     score = round(score01 * 100)
 
@@ -74,21 +69,29 @@ def calculate_risk(student: StudentState) -> Dict[str, Any]:
 
     # Find dominant term
     dominant = max(weighted_terms, key=lambda k: weighted_terms[k])
+    dominant_val = weighted_terms[dominant]
 
-    # Human readable detail for dominant term
     details = {
         "score_gap": f"Academic scores are far below target (average gap is {score_gap*100:.1f}%).",
         "syllabus_behind": f"Syllabus completion is low ({student.nearest_exam.completion*100:.1f}%) for nearest exam in {student.nearest_exam.days_to_exam if student.nearest_exam else 0} days." if student.nearest_exam else "Syllabus completion is low.",
         "activity_recency": f"Student has been inactive for {student.days_since_active} days.",
-        "trend": f"There is a severe downward trend in grades (average drop of {trend*100:.1f}%)."
+        "trend": f"There is a downward trend in grades (average drop of {trend*100:.1f}%)."
     }
 
-    reason = f"{level} — {details[dominant]}"
+    reasons = [f"{level} — {details[dominant]}"]
 
-    return {
-        "score": score,
-        "level": level,
-        "dominant": dominant,
-        "reason": reason,
-        "contributions": contributions
-    }
+    # Add secondary reasons (contribution within 20% of dominant)
+    if dominant_val > 0.0:
+        for term, val in weighted_terms.items():
+            if term != dominant and val >= 0.8 * dominant_val:
+                reasons.append(details[term])
+
+    computed_at = datetime.now(timezone.utc).isoformat()
+
+    return RiskResult(
+        score=score,
+        level=level,
+        reasons=reasons,
+        components=components,
+        computed_at=computed_at
+    )

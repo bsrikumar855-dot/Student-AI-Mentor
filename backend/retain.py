@@ -33,7 +33,6 @@ def apply_sm2(topic: TopicMemory, quality: int, today: datetime = None) -> Topic
     ef = max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
     next_review = today + timedelta(days=interval)
     
-    # Return updated topic memory
     return TopicMemory(
         topic=topic.topic,
         learned_on=topic.learned_on,
@@ -46,22 +45,18 @@ def apply_sm2(topic: TopicMemory, quality: int, today: datetime = None) -> Topic
 def recall_estimate(topic: TopicMemory, today: datetime = None) -> float:
     """
     Calculates estimated recall probability using a forgetting curve.
-    recall = exp(-days_since_learned / (max(interval, 1) * 1.4))
     """
     if today is None:
         today = datetime.now()
         
     days_since_learned = (today - topic.learned_on).days
-    # If the learned_on is in the future, days_since_learned might be negative. Let's clamp to >= 0
     days_since_learned = max(0, days_since_learned)
-    
     interval = max(topic.interval, 1)
     return math.exp(-days_since_learned / (interval * 1.4))
 
 def due_topics(state: StudentState, today: datetime = None) -> List[Dict[str, Any]]:
     """
     Finds topics where next_review <= today OR recall < 0.6, sorted weakest-recall first.
-    Returns: list of {"topic": str, "recall": float, "why": str}
     """
     if today is None:
         today = datetime.now()
@@ -73,15 +68,12 @@ def due_topics(state: StudentState, today: datetime = None) -> List[Dict[str, An
         is_low_recall = recall < 0.6
         
         if is_overdue or is_low_recall:
-            why_reasons = []
-            if is_overdue:
-                why_reasons.append("next review is overdue")
-            if is_low_recall:
-                why_reasons.append(f"estimated recall is low ({recall*100:.1f}%)")
+            days_since_learned = (today - t.learned_on).days
+            days_since_learned = max(0, days_since_learned)
             due.append({
                 "topic": t.topic,
                 "recall": recall,
-                "why": f"Topic '{t.topic}' requires review because " + " and ".join(why_reasons) + "."
+                "why": f"Estimated recall of {recall*100:.0f}% after {days_since_learned} days since topic was learned."
             })
             
     # Sort weakest-recall first

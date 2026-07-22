@@ -105,10 +105,96 @@
       }
     },
     "risk": {
-      "type": ["object", "null"]
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "integer"
+            },
+            "level": {
+              "type": "string",
+              "enum": ["Low", "Medium", "High"]
+            },
+            "reasons": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "components": {
+              "type": "object",
+              "properties": {
+                "score_gap": {
+                  "type": "number"
+                },
+                "syllabus_behind": {
+                  "type": "number"
+                },
+                "activity_recency": {
+                  "type": "number"
+                },
+                "trend": {
+                  "type": "number"
+                }
+              },
+              "required": ["score_gap", "syllabus_behind", "activity_recency", "trend"]
+            },
+            "computed_at": {
+              "type": "string"
+            }
+          },
+          "required": ["score", "level", "reasons", "components", "computed_at"]
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "predictions": {
-      "type": ["object", "null"]
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "projected_gpa": {
+              "type": "number"
+            },
+            "exam_trend": {
+              "type": "string",
+              "enum": ["improving", "declining", "stable"]
+            },
+            "exam_forecast": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "subject": {
+                    "type": "string"
+                  },
+                  "projected_score": {
+                    "type": "number"
+                  },
+                  "fail_risk": {
+                    "type": "string",
+                    "enum": ["Low", "Medium", "High"]
+                  },
+                  "why": {
+                    "type": "string"
+                  }
+                },
+                "required": ["subject", "projected_score", "fail_risk", "why"]
+              }
+            },
+            "computed_at": {
+              "type": "string"
+            }
+          },
+          "required": ["projected_gpa", "exam_trend", "exam_forecast", "computed_at"]
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [

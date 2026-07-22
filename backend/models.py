@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -22,6 +22,31 @@ class TopicMemory(BaseModel):
     interval: int
     next_review: datetime
 
+class RiskComponents(BaseModel):
+    score_gap: float
+    syllabus_behind: float
+    activity_recency: float
+    trend: float
+
+class RiskResult(BaseModel):
+    score: int
+    level: Literal["Low", "Medium", "High"]
+    reasons: List[str]
+    components: RiskComponents
+    computed_at: str
+
+class ExamForecast(BaseModel):
+    subject: str
+    projected_score: float
+    fail_risk: Literal["Low", "Medium", "High"]
+    why: str
+
+class PredictionResult(BaseModel):
+    projected_gpa: float
+    exam_trend: Literal["improving", "declining", "stable"]
+    exam_forecast: List[ExamForecast]
+    computed_at: str
+
 class StudentState(BaseModel):
     student_id: str
     name: str
@@ -36,14 +61,14 @@ class StudentState(BaseModel):
     goals_met_streak: int
     topics: List[TopicMemory]
     skills: List[str]
-    risk: Optional[Dict[str, Any]] = None
-    predictions: Optional[Dict[str, Any]] = None
+    risk: Optional[RiskResult] = None
+    predictions: Optional[PredictionResult] = None
 
 class DailyTarget(BaseModel):
     id: str
     task: str
     why: str
-    kind: str
+    kind: Literal["review", "practice", "academic", "career", "recovery", "stretch"]
     done: bool
 
 class ScheduleSlot(BaseModel):
@@ -51,10 +76,12 @@ class ScheduleSlot(BaseModel):
     task: str
 
 class Intervention(BaseModel):
+    id: str
     action: str
     why: str
-    kind: str
+    kind: Literal["academic", "career", "recovery", "wellness"]
     auto: bool
+    reviewed: bool = False # Flag to support approval / dismissal review
 
 class Plan(BaseModel):
     student_id: str
@@ -63,3 +90,12 @@ class Plan(BaseModel):
     daily_targets: List[DailyTarget]
     schedule: List[ScheduleSlot]
     interventions: List[Intervention]
+    generated_at: str
+
+class InternshipMatch(BaseModel):
+    title: str
+    company: str
+    match: float
+    have: List[str]
+    missing: List[str]
+    why: str

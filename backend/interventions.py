@@ -5,26 +5,28 @@ Interventions Module: Trigger specific actions (e.g., peer tutoring, faculty ale
 import json
 import os
 from typing import List, Dict, Any, Optional
-from backend.models import StudentState, Intervention
+from backend.models import StudentState, Intervention, RiskResult
 from backend.retain import due_topics
 from backend.internships import match_internships
 
 def evaluate_interventions(
     student: StudentState, 
-    risk_state: Dict[str, Any], 
+    risk_state: RiskResult, 
     internships_db: Optional[List[Dict[str, Any]]] = None
 ) -> List[Intervention]:
     """
     Evaluates risk and student metrics against predefined rules to trigger interventions.
     """
     interventions = []
+    sid = student.student_id
 
     # 1. recovery_plan: days_since_active >= 5
     if student.days_since_active >= 5:
         interventions.append(Intervention(
+            id=f"{sid}:recovery_plan:active",
             action="recovery_plan",
             why=f"Student has been inactive for {student.days_since_active} days.",
-            kind="academic",
+            kind="recovery",
             auto=True
         ))
 
@@ -33,6 +35,7 @@ def evaluate_interventions(
         ne = student.nearest_exam
         if ne.days_to_exam <= 7 and ne.completion < 0.5:
             interventions.append(Intervention(
+                id=f"{sid}:revision_timetable:{ne.subject.lower()}",
                 action="revision_timetable",
                 why=f"Nearest exam '{ne.subject}' is in {ne.days_to_exam} days, but syllabus completion is only {ne.completion*100:.0f}%.",
                 kind="academic",
@@ -43,6 +46,7 @@ def evaluate_interventions(
     for s in student.subjects:
         if len(s.trend) >= 2 and s.trend[-1] < s.trend[-2]:
             interventions.append(Intervention(
+                id=f"{sid}:weak_topic:{s.name.lower()}",
                 action="weak_topic",
                 why=f"Recent downward grade trend in '{s.name}' ({s.trend[-2]} -> {s.latest}).",
                 kind="academic",
@@ -52,16 +56,19 @@ def evaluate_interventions(
     # 4. revision_mission: for each retain.due_topics(state)
     due = due_topics(student)
     for topic_due in due:
+        topic_slug = topic_due["topic"].lower().replace(" ", "_")
         interventions.append(Intervention(
+            id=f"{sid}:revision_mission:{topic_slug}",
             action="revision_mission",
             why=topic_due["why"],
-            kind="revision",
+            kind="academic",
             auto=True
         ))
 
     # 5. ramp_difficulty: goals_met_streak >= 7
     if student.goals_met_streak >= 7:
         interventions.append(Intervention(
+            id=f"{sid}:ramp_difficulty:streak",
             action="ramp_difficulty",
             why=f"Student is on a {student.goals_met_streak}-day goal completion streak.",
             kind="academic",
@@ -71,6 +78,7 @@ def evaluate_interventions(
     # 6. git_nudge: days_since_commit >= 10
     if student.days_since_commit >= 10:
         interventions.append(Intervention(
+            id=f"{sid}:git_nudge:commit",
             action="git_nudge",
             why=f"No GitHub commits for {student.days_since_commit} days.",
             kind="career",
@@ -80,18 +88,17 @@ def evaluate_interventions(
     # 7. linkedin_nudge: days_since_linkedin >= 14
     if student.days_since_linkedin >= 14:
         interventions.append(Intervention(
+            id=f"{sid}:linkedin_nudge:linkedin",
             action="linkedin_nudge",
             why=f"No LinkedIn activity for {student.days_since_linkedin} days.",
             kind="career",
             auto=True
         ))
 
-    # 8. internship_match: internships.match returns any 'ready'
+    # 8. internship_match: internships has any match==1.0
     if internships_db is None:
-        # Load from backend/data/internships.json
         base_dir = os.path.dirname(os.path.dirname(__file__))
         db_path = os.path.join(base_dir, "backend", "data", "internships.json")
-        # Fallback to backend/data if root path issues
         if not os.path.exists(db_path):
             db_path = os.path.join(base_dir, "data", "internships.json")
         if os.path.exists(db_path):
@@ -104,20 +111,23 @@ def evaluate_interventions(
             internships_db = []
             
     matches = match_internships(student.skills, student.cgpa, internships_db)
-    ready_matches = [m for m in matches if m["status"] == "ready"]
+    ready_matches = [m for m in matches if m.match == 1.0]
     for m in ready_matches:
+        role_slug = m.title.lower().replace(" ", "_")
         interventions.append(Intervention(
+            id=f"{sid}:internship_match:{role_slug}",
             action="internship_match",
-            why=f"Eligible and ready for internship: {m['title']} at {m['company']}.",
+            why=f"Eligible and ready for internship: {m.title} at {m.company}.",
             kind="career",
             auto=True
         ))
 
     # 9. flag_at_risk: risk_state level is High
-    if risk_state.get("level") == "High":
+    if risk_state.level == "High":
         interventions.append(Intervention(
+            id=f"{sid}:flag_at_risk:risk",
             action="flag_at_risk",
-            why=f"Overall risk level is High ({risk_state.get('score')}/100).",
+            why=f"Overall risk level is High ({risk_state.score}/100).",
             kind="academic",
             auto=False
         ))

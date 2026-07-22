@@ -27,7 +27,8 @@
             "type": "string"
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "enum": ["review", "practice", "academic", "career", "recovery", "stretch"]
           },
           "done": {
             "type": "boolean"
@@ -56,6 +57,9 @@
       "items": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string"
+          },
           "action": {
             "type": "string"
           },
@@ -63,14 +67,21 @@
             "type": "string"
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "enum": ["academic", "career", "recovery", "wellness"]
           },
           "auto": {
             "type": "boolean"
+          },
+          "reviewed": {
+            "type": "boolean"
           }
         },
-        "required": ["action", "why", "kind", "auto"]
+        "required": ["id", "action", "why", "kind", "auto"]
       }
+    },
+    "generated_at": {
+      "type": "string"
     }
   },
   "required": [
@@ -79,6 +90,7 @@
     "message",
     "daily_targets",
     "schedule",
-    "interventions"
+    "interventions",
+    "generated_at"
   ]
 }

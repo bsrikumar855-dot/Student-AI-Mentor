@@ -10,7 +10,6 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
     """
     Generates synthetic student data including 1 hero (Aisha) and writes to an Excel file.
     """
-    # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     # 1. Students sheet
@@ -116,7 +115,6 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         })
     df_topics = pd.DataFrame(topics)
     
-    # Write to Excel
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         df_students.to_excel(writer, sheet_name="students", index=False)
         df_scores.to_excel(writer, sheet_name="scores", index=False)

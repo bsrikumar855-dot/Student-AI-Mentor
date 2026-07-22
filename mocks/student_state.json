@@ -53,12 +53,28 @@
   ],
   "skills": ["Python", "SQL", "Git"],
   "risk": {
-    "score": 45.0,
+    "score": 45,
     "level": "Medium",
-    "reasons": ["Downward trend in Database Systems", "Low exam completion in Database Systems"]
+    "reasons": ["Downward trend in Database Systems", "Low exam completion in Database Systems"],
+    "components": {
+      "score_gap": 0.15,
+      "syllabus_behind": 0.32,
+      "activity_recency": 0.28,
+      "trend": 0.23
+    },
+    "computed_at": "2026-07-22T05:32:00Z"
   },
   "predictions": {
-    "projected_gpa": 3.25,
-    "exam_trend": "stable"
+    "projected_gpa": 6.9,
+    "exam_trend": "stable",
+    "exam_forecast": [
+      {
+        "subject": "Data Structures",
+        "projected_score": 75.0,
+        "fail_risk": "Low",
+        "why": "Consistent performance"
+      }
+    ],
+    "computed_at": "2026-07-22T05:32:00Z"
   }
 }

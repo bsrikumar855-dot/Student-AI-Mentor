@@ -11,13 +11,18 @@ def phrase_intervention_message(student: StudentState, plan: Plan, api_key: Opti
     """
     if api_key:
         # TODO Phase 3
-        # Lazy import goes here to prevent importing LLM SDK at module top
+        # Lazy import of LLM SDK goes here
         pass
 
     # Templated fallback path
     if plan.interventions:
-        primary = plan.interventions[0]
-        msg = f"Hi {student.name}, this is Polaris. We've detected a need for {primary.action} because: {primary.why} Let's work together to address this!"
+        reasons_list = [f"- {i.why}" for i in plan.interventions]
+        reasons_str = "\n".join(reasons_list)
+        msg = (
+            f"Hi {student.name}, this is Polaris. We've detected some areas that need attention:\n"
+            f"{reasons_str}\n"
+            f"Let's work together to address these and keep you on track!"
+        )
     else:
         msg = f"Hi {student.name}, this is Polaris. Your academic track looks stable! Keep up the great work."
         

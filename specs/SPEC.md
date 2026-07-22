@@ -1,4 +1,4 @@
-# Polaris Project Specification (Phase 2)
+# Polaris Project Specification (Phase 2 Refined)
 
 Polaris is a proactive AI student mentor designed to ingest LMS data, score academic risk, plan daily study schedules, track progress, and intervene when a student drifts. It runs a deterministic decision core with a separate natural language layer.
 
@@ -17,8 +17,7 @@ Polaris is a proactive AI student mentor designed to ingest LMS data, score acad
 ### 1. Ingest Module (`ingest.py`)
 - **Intent**: Extract and structure student LMS data from Excel spreadsheets into `StudentState` schemas.
 - **Inputs**: Excel file (`cohort.xlsx` or uploaded file stream).
-- **Outputs**: Dictionary/Pydantic representation of `StudentState`.
-- **Acceptance Criteria**: Properly parses tables, handles missing columns gracefully, converts dates to ISO format, and validates structure.
+- **Outputs**: List of `StudentState` objects.
 - **Workbook Sheets**:
   - `students(student_id,name,cgpa,attendance,days_since_active,days_since_commit,days_since_linkedin,goals_met_streak,skills[comma-sep])`
   - `scores(student_id,subject,test_no,score)` (long format)
@@ -33,20 +32,23 @@ Polaris is a proactive AI student mentor designed to ingest LMS data, score acad
   - `activity_recency = min(days_since_active / 7, 1)`
   - `trend = mean over subjects (len >= 2, trend[0] > 0) of max(0, (trend[0] - trend[-1]) / trend[0])`
   - `WEIGHTS = score_gap: 0.35, syllabus_behind: 0.25, activity_recency: 0.25, trend: 0.15`
-  - `score01 = Σ weight * term`
-  - `score = round(score01 * 100)`
+  - `score = round(sum(weight * term) * 100)`
   - `level = Low (<33) / Medium (<66) / High (>=66)`
   - `dominant = name of term with the highest weight * term value`
-  - `reason = "{level} — {human detail for the dominant term, citing real data}"`
-- **Output**: `RiskState` containing `{score, level, dominant, reason, contributions: {term: val}}`
+  - `reasons[0] = "{level} — {human detail for the dominant term, citing real data}"`
+  - Add secondary reasons for any other term whose contribution is within 20% of dominant.
+- **Output**: `RiskResult` containing `{score, level, reasons, components: {score_gap, syllabus_behind, activity_recency, trend}, computed_at}`
 
 ### 3. Prediction Module (`predict.py`)
 - **Formula**:
   - `slope = (trend[-1] - trend[0]) / (len - 1)` (if len >= 2, else 0)
-  - `projected_exam = clamp(latest + slope * (days_to_exam / 7), 0, 100)`
-  - `projected_gpa = mean(projected_exam / 10) over subjects` (10-point scale)
+  - `d = nearest_exam.days_to_exam or 14`
+  - `projected_score = clamp(latest + slope * (d / 7), 0, 100)`
   - `fail_risk = High (<40) / Medium (<55) / Low (>=55)`
-- **Output**: `{projected_gpa, current_cgpa, gpa_direction, subjects: [{subject, current, projected, direction, fail_risk, why}]}`
+  - `why = "{subj}: {latest:.0f}% now, {'+' if slope>=0 else ''}{slope:.0f}/wk -> ~{projected_score:.0f}% at exam"`
+  - `projected_gpa = round(mean(projected_score / 10), 2)` (10-point scale)
+  - `exam_trend = improving (mean_slope > +0.5) / declining (<-0.5) / stable`
+- **Output**: `PredictionResult` containing `{projected_gpa, exam_trend, exam_forecast: [{subject, projected_score, fail_risk, why}], computed_at}`
 
 ### 4. Spaced Repetition Module (`retain.py`)
 - **SM-2 Algorithm**:
@@ -58,20 +60,23 @@ Polaris is a proactive AI student mentor designed to ingest LMS data, score acad
   - `recall = exp(-days_since_learned / (max(interval, 1) * 1.4))`
 - **Due Topics**:
   - Find topics where `next_review <= today OR recall < 0.6`, sorted weakest-recall first.
+  - Cites recall% and days since learned.
 
 ### 5. Internships Module (`internships.py`)
-- **Fit Scoring**: Match student skills and readiness against curated internship vacancies in `internships.json`. Fit is calculated based on skill overlap and satisfying the minimum CGPA requirement (10-point scale).
+- **Fit Scoring**: Match student skills and readiness against curated internship vacancies. Fit is calculated based on skill overlap and satisfying the minimum CGPA requirement (10-point scale).
+- **Match Output**: `InternshipMatch` containing `{title, company, match, have, missing, why}`
+- Sorted by match desc, filtered match >= 0.5. A role is "ready" when match == 1.0.
 
 ### 6. Interventions Module (`interventions.py`)
-Trigger specific actions based on deterministic threshold violations:
-- `recovery_plan`: `days_since_active >= 5`, kind: `academic`, auto: `true`
+Trigger specific actions based on deterministic threshold violations. Each Intervention kind must map to one of: `{"academic", "career", "recovery", "wellness"}`.
+- `recovery_plan`: `days_since_active >= 5`, kind: `recovery`, auto: `true`
 - `revision_timetable`: `nearest_exam.days_to_exam <= 7` and `completion < 0.5`, kind: `academic`, auto: `true`
 - `weak_topic`: any subject `trend[-1] < trend[-2]`, kind: `academic`, auto: `true`
-- `revision_mission`: for each `retain.due_topics(state)`, kind: `revision`, auto: `true`
+- `revision_mission`: for each `retain.due_topics(state)`, kind: `academic`, auto: `true`
 - `ramp_difficulty`: `goals_met_streak >= 7`, kind: `academic`, auto: `true`
 - `git_nudge`: `days_since_commit >= 10`, kind: `career`, auto: `true`
 - `linkedin_nudge`: `days_since_linkedin >= 14`, kind: `career`, auto: `true`
-- `internship_match`: internships matching any "ready" status, kind: `career`, auto: `true`
+- `internship_match`: internships matching any "ready" status (match == 1.0), kind: `career`, auto: `true`
 - `flag_at_risk`: `risk.level == 'High'`, kind: `academic`, auto: `false`
 
 ### 7. Language Layer (`language.py`)

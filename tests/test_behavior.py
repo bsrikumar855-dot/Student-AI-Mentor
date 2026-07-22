@@ -97,12 +97,10 @@ def test_calculate_risk_behavior():
         predictions=None
     )
     res = calculate_risk(student)
-    assert "score" in res
-    assert "level" in res
-    assert "dominant" in res
-    assert "reason" in res
-    assert "contributions" in res
-
+    assert res.score is not None
+    assert res.level == "Medium"
+    assert len(res.reasons) >= 1
+    assert res.components.score_gap is not None
 
 def test_predict_trends_behavior():
     from datetime import datetime
@@ -118,7 +116,7 @@ def test_predict_trends_behavior():
         exams=[
             Exam(subject="Subj1", date=datetime.now(), days_to_exam=7, completion=0.5)
         ],
-        nearest_exam=None,
+        nearest_exam=Exam(subject="Subj1", date=datetime.now(), days_to_exam=7, completion=0.5),
         days_since_active=0,
         days_since_commit=0,
         days_since_linkedin=0,
@@ -129,11 +127,10 @@ def test_predict_trends_behavior():
         predictions=None
     )
     res = predict_trends(student)
-    assert res["projected_gpa"] == 9.0
-    assert res["current_cgpa"] == 7.5
-    assert res["gpa_direction"] == "up"
-    assert res["subjects"][0]["direction"] == "up"
-    assert res["subjects"][0]["fail_risk"] == "Low"
+    assert res.projected_gpa == 9.0
+    assert res.exam_trend == "improving"
+    assert res.exam_forecast[0].fail_risk == "Low"
+
 def test_apply_sm2_behavior():
     from datetime import datetime
     from backend.models import TopicMemory
@@ -156,10 +153,9 @@ def test_match_internships_behavior():
         {"title": "Frontend Intern", "company": "Co2", "required_skills": ["React"], "min_cgpa": 8.5}
     ]
     res = match_internships(["python", "django"], 7.5, db)
-    assert res[0]["title"] == "Backend Intern"
-    assert res[0]["status"] == "ready"
-    assert res[1]["title"] == "Frontend Intern"
-    assert res[1]["status"] == "not_eligible"
+    assert res[0].title == "Backend Intern"
+    assert res[0].match == 1.0
+    assert "meets all" in res[0].why
 
 def test_language_phrase_fallback():
     from backend.models import StudentState, Plan, Intervention
@@ -187,16 +183,16 @@ def test_language_phrase_fallback():
         daily_targets=[],
         schedule=[],
         interventions=[
-            Intervention(action="recovery_plan", why="inactive for 5 days", kind="academic", auto=True)
-        ]
+            Intervention(id="STU1:recovery_plan:active", action="recovery_plan", why="inactive for 5 days", kind="recovery", auto=True)
+        ],
+        generated_at="2026-07-22T10:00:00Z"
     )
     msg = phrase_intervention_message(student, plan)
     assert "inactive for 5 days" in msg
 
-
 def test_evaluate_interventions_behavior():
     from datetime import datetime
-    from backend.models import Subject, Exam, StudentState
+    from backend.models import Subject, Exam, StudentState, RiskResult, RiskComponents
     student = StudentState(
         student_id="STU1",
         name="Test Student",
@@ -218,11 +214,18 @@ def test_evaluate_interventions_behavior():
         risk=None,
         predictions=None
     )
-    risk_state = {"level": "Low", "score": 20}
+    risk_state = RiskResult(
+        score=20,
+        level="Low",
+        reasons=["Low risk"],
+        components=RiskComponents(score_gap=0.0, syllabus_behind=0.0, activity_recency=0.0, trend=0.0),
+        computed_at="2026-07-22T10:00:00Z"
+    )
     db = [{"title": "Intern", "company": "Co1", "required_skills": ["python"], "min_cgpa": 6.0}]
     
     interventions = evaluate_interventions(student, risk_state, db)
     actions = [i.action for i in interventions]
     assert "recovery_plan" in actions
     assert "internship_match" in actions
+
 

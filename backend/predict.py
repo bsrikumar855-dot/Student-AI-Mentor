@@ -3,47 +3,38 @@ Prediction Module: Project GPA trends and exam readiness based on historical sco
 """
 
 from typing import Dict, Any, List
-from backend.models import StudentState
+from datetime import datetime, timezone
+from backend.models import StudentState, PredictionResult, ExamForecast
 
 def clamp(val: float, min_val: float, max_val: float) -> float:
     return max(min_val, min(val, max_val))
 
-def predict_trends(student: StudentState) -> Dict[str, Any]:
+def predict_trends(student: StudentState) -> PredictionResult:
     """
     Predicts GPA and exam trends for the student.
-    Formula:
-      slope = (trend[-1] - trend[0]) / (len - 1)
-      projected_exam = clamp(latest + slope * (days_to_exam / 7), 0, 100)
-      projected_gpa = mean(projected_exam / 10) over subjects
-      fail_risk = High (<40) / Medium (<55) / Low (>=55)
     """
-    subjects_output = []
-    projected_exams = []
-    
-    # Map exams by subject name for easy lookup
+    exam_forecast = []
+    projected_scores = []
+    slopes = []
+
+    # Map exams by subject for easy lookup
     exam_map = {e.subject: e for e in student.exams}
     
+    # We find d from nearest_exam.days_to_exam, or default to 14
+    d = student.nearest_exam.days_to_exam if student.nearest_exam else 14
+
     for s in student.subjects:
-        # Find days_to_exam
-        exam = exam_map.get(s.name)
-        days_to_exam = exam.days_to_exam if exam else 7
-        
         # Calculate slope
         if len(s.trend) >= 2:
             slope = (s.trend[-1] - s.trend[0]) / (len(s.trend) - 1)
         else:
             slope = 0.0
             
-        projected = clamp(s.latest + slope * (days_to_exam / 7.0), 0.0, 100.0)
-        projected_exams.append(projected)
+        slopes.append(slope)
         
-        if slope > 0:
-            direction = "up"
-        elif slope < 0:
-            direction = "down"
-        else:
-            direction = "stable"
-            
+        projected = clamp(s.latest + slope * (d / 7.0), 0.0, 100.0)
+        projected_scores.append(projected)
+        
         if projected < 40:
             fail_risk = "High"
         elif projected < 55:
@@ -51,32 +42,33 @@ def predict_trends(student: StudentState) -> Dict[str, Any]:
         else:
             fail_risk = "Low"
             
-        why = f"Based on score trend of {s.trend} and latest score of {s.latest} over {days_to_exam} days to exam."
+        why = f"{s.name}: {s.latest:.0f}% now, {'+' if slope>=0 else ''}{slope:.0f}/wk -> ~{projected:.0f}% at exam"
         
-        subjects_output.append({
-            "subject": s.name,
-            "current": s.latest,
-            "projected": projected,
-            "direction": direction,
-            "fail_risk": fail_risk,
-            "why": why
-        })
-        
-    if projected_exams:
-        projected_gpa = sum(pe / 10.0 for pe in projected_exams) / len(projected_exams)
+        exam_forecast.append(ExamForecast(
+            subject=s.name,
+            projected_score=projected,
+            fail_risk=fail_risk,
+            why=why
+        ))
+
+    if projected_scores:
+        projected_gpa = sum(score / 10.0 for score in projected_scores) / len(projected_scores)
     else:
         projected_gpa = student.cgpa
         
-    if projected_gpa > student.cgpa:
-        gpa_direction = "up"
-    elif projected_gpa < student.cgpa:
-        gpa_direction = "down"
+    mean_slope = sum(slopes) / len(slopes) if slopes else 0.0
+    if mean_slope > 0.5:
+        exam_trend = "improving"
+    elif mean_slope < -0.5:
+        exam_trend = "declining"
     else:
-        gpa_direction = "stable"
-        
-    return {
-        "projected_gpa": round(projected_gpa, 2),
-        "current_cgpa": student.cgpa,
-        "gpa_direction": gpa_direction,
-        "subjects": subjects_output
-    }
+        exam_trend = "stable"
+
+    computed_at = datetime.now(timezone.utc).isoformat()
+
+    return PredictionResult(
+        projected_gpa=round(projected_gpa, 2),
+        exam_trend=exam_trend,
+        exam_forecast=exam_forecast,
+        computed_at=computed_at
+    )

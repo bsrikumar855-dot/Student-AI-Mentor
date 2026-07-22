@@ -30,10 +30,13 @@
   ],
   "interventions": [
     {
+      "id": "STU1001:weak_topic:database_systems",
       "action": "Schedule peer tutoring",
       "why": "Continuous downward score trend in Database Systems.",
       "kind": "academic",
-      "auto": true
+      "auto": true,
+      "reviewed": false
     }
-  ]
+  ],
+  "generated_at": "2026-07-22T05:32:00Z"
 }
