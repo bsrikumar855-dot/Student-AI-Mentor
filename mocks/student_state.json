@@ -70,7 +70,9 @@
     "exam_forecast": [
       {
         "subject": "Data Structures",
-        "projected_score": 75.0
+        "projected_score": 75.0,
+        "fail_risk": "Low",
+        "why": "Data Structures: 79% now, +7/wk -> ~75% at exam"
       }
     ],
     "computed_at": "2026-07-22T05:32:00Z"

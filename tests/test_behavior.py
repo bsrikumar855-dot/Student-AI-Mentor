@@ -174,6 +174,41 @@ def test_predict_trends_behavior():
     assert res.projected_gpa == 9.0
     assert res.exam_trend == "improving"
     assert res.exam_forecast[0].projected_score == 90.0
+    assert res.exam_forecast[0].fail_risk == "Low"
+    assert "Subj1" in res.exam_forecast[0].why
+    assert "80%" in res.exam_forecast[0].why  # latest score
+    assert "90%" in res.exam_forecast[0].why  # projected score
+
+
+def test_predict_trends_d_fallback_at_zero():
+    """When days_to_exam==0, SPEC's `or 14` semantics should fall back to d=14."""
+    from datetime import datetime
+    from backend.models import Subject, Exam, StudentState
+    student = StudentState(
+        student_id="STU1",
+        name="Test Student",
+        cgpa=7.5,
+        attendance=0.8,
+        subjects=[
+            Subject(name="Subj1", latest=50.0, trend=[40.0, 50.0], flag=None)
+        ],
+        exams=[
+            Exam(subject="Subj1", date=datetime.now(), days_to_exam=0, completion=0.5)
+        ],
+        nearest_exam=Exam(subject="Subj1", date=datetime.now(), days_to_exam=0, completion=0.5),
+        days_since_active=0,
+        days_since_commit=0,
+        days_since_linkedin=0,
+        goals_met_streak=0,
+        topics=[],
+        skills=[],
+        risk=None,
+        predictions=None
+    )
+    res = predict_trends(student)
+    # slope = (50 - 40) / 1 = 10, d = 14 (fallback), projected = 50 + 10*(14/7) = 70.0
+    assert res.exam_forecast[0].projected_score == 70.0
+    assert res.exam_forecast[0].fail_risk == "Low"
 
 
 def test_apply_sm2_behavior():
@@ -272,4 +307,5 @@ def test_evaluate_interventions_behavior():
     actions = [i.action for i in interventions]
     assert "recovery_plan" in actions
     assert "internship_match" in actions
+
 
