@@ -57,3 +57,16 @@ To parallelize development during the hackathon, the work can be split among thr
   - Implement isolated LLM calling in `language.py` with custom prompt formatting, including dynamic text-based template degradation if API keys are missing.
   - Connect FastAPI endpoints in `main.py` to the store and decision components.
   - Build React components for the Student view and the Faculty At-Risk dashboard.
+
+## Verification of LLM Layer
+To test the live Gemini integration locally, run:
+```bash
+$env:GEMINI_API_KEY="AIzaSy..."
+$env:GEMINI_MODEL="gemini-flash-latest"
+python -m pytest tests/test_llm_live.py
+```
+Or on Linux/macOS:
+```bash
+GEMINI_API_KEY=... GEMINI_MODEL=gemini-flash-latest python -m pytest tests/test_llm_live.py
+```
+
