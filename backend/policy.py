@@ -20,11 +20,11 @@ _DEFAULT = PolicyConfig(
     internship_match_min=0.5,
     risk_activity_divisor=7.0,
     risk_weights={
-        "score_gap": 0.35,
-        "syllabus_behind": 0.24,
-        "activity_recency": 0.22,
-        "trend": 0.14,
-        "coding_activity": 0.05,
+        "score_gap": 0.34,
+        "syllabus_behind": 0.25,
+        "activity_recency": 0.25,
+        "trend": 0.15,
+        "coding_activity": 0.01,
     },
 )
 

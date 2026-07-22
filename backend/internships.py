@@ -2,13 +2,23 @@
 Internships Module: Match student skills and readiness against curated internship vacancies.
 """
 
-from typing import List, Dict, Any
-from backend.models import InternshipMatch
+from typing import List, Dict, Any, Optional
+from backend.models import InternshipMatch, PolicyConfig
+from backend import policy as policy_module
 
-def match_internships(skills: List[str], cgpa: float, internships_db: List[Dict[str, Any]]) -> List[InternshipMatch]:
+def match_internships(
+    skills: List[str],
+    cgpa: float,
+    internships_db: List[Dict[str, Any]],
+    policy: Optional[PolicyConfig] = None,
+) -> List[InternshipMatch]:
     """
-    Computes matches based on skill overlap and filters by match score >= 0.5 and meeting CGPA requirement.
+    Computes matches based on skill overlap and filters by match score >= policy.internship_match_min
+    and meeting CGPA requirement.
     """
+    if policy is None:
+        policy = policy_module.get_policy()
+
     matches = []
     student_skills_set = {s.lower() for s in skills}
     
@@ -33,7 +43,7 @@ def match_internships(skills: List[str], cgpa: float, internships_db: List[Dict[
         else:
             match_score = round(len(have_skills) / len(req), 2)
             
-        if match_score < 0.5:
+        if match_score < policy.internship_match_min:
             continue
             
         # Reconstruct standard skill capitalization from item
