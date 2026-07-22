@@ -104,3 +104,10 @@ class ChatRequest(BaseModel):
     student_id: str
     message: str
     history: List[Dict[str, Any]] = []
+
+class GradeRequest(BaseModel):
+    quality: int = Field(..., ge=0, le=5)
+
+class ReviewRequest(BaseModel):
+    decision: str = Field(..., pattern="^(approve|override)$")
+    note: Optional[str] = None

@@ -1,13 +1,13 @@
 from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 import json
 import os
 
 from backend.models import (
     StudentState, Plan,
-    RiskResult, PredictionResult, InternshipMatch, TopicMemory, ChatRequest
+    RiskResult, PredictionResult, InternshipMatch, TopicMemory, ChatRequest,
+    GradeRequest, ReviewRequest
 )
 from backend.store import InMemoryStore
 from backend.ingest import ingest_excel
@@ -28,12 +28,7 @@ app = FastAPI(
 router = APIRouter(prefix="/api/v1")
 store = InMemoryStore(persist_path=os.environ.get("POLARIS_PERSIST_PATH"))
 
-class GradeRequest(BaseModel):
-    quality: int = Field(..., ge=0, le=5)
 
-class ReviewRequest(BaseModel):
-    decision: str = Field(..., pattern="^(approve|override)$")
-    note: Optional[str] = None
 
 def generate_plan_for_student(student: StudentState) -> Plan:
     risk_state = calculate_risk(student)
