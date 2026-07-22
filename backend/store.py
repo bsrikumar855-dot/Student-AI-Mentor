@@ -53,7 +53,8 @@ class InMemoryStore:
     def load_json(self, path: str) -> None:
         """
         Rehydrates students, plans, and the audit log from `path`. A missing file is a
-        no-op; a corrupt/unparseable file leaves the store empty rather than raising.
+        no-op. A corrupt/unparseable/wrong-shape file does not raise and leaves any
+        existing in-memory state untouched (load is all-or-nothing).
         """
         if not os.path.exists(path):
             return
@@ -64,9 +65,7 @@ class InMemoryStore:
             plans = {sid: Plan(**d) for sid, d in data["plans"].items()}
             audit_log = data["audit_log"]
         except Exception:
-            self._students = {}
-            self._plans = {}
-            self.audit_log = []
+            # Leave existing in-memory state untouched on any failure.
             return
         self._students = students
         self._plans = plans

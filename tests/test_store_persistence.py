@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from backend.store import InMemoryStore
@@ -70,7 +71,7 @@ def test_load_json_missing_path_is_noop(tmp_path):
     assert store.audit_log == []
 
 
-def test_load_json_corrupt_file_leaves_store_empty(tmp_path):
+def test_load_json_corrupt_file_is_noop_when_store_empty(tmp_path):
     path = str(tmp_path / "corrupt.json")
     with open(path, "w") as f:
         f.write("{not valid json::")
@@ -80,6 +81,35 @@ def test_load_json_corrupt_file_leaves_store_empty(tmp_path):
     assert store.list_students() == []
     assert store._plans == {}
     assert store.audit_log == []
+
+
+def test_load_json_bad_file_preserves_existing_data(tmp_path):
+    student = make_student()
+    plan = make_plan()
+    audit_entry = {"action": "plan_generate", "student_id": "STU1", "timestamp": "2026-07-22T10:00:00+00:00"}
+
+    corrupt_path = str(tmp_path / "corrupt.json")
+    with open(corrupt_path, "w") as f:
+        f.write("{not valid json::")
+
+    store = InMemoryStore()
+    store.save_student(student)
+    store.save_plan(student.student_id, plan)
+    store.audit_log.append(audit_entry)
+
+    store.load_json(corrupt_path)
+    assert store.get_student("STU1") == student
+    assert store.get_plan("STU1") == plan
+    assert store.audit_log == [audit_entry]
+
+    wrong_shape_path = str(tmp_path / "wrongshape.json")
+    with open(wrong_shape_path, "w") as f:
+        json.dump({"students": {}}, f)  # valid JSON, but missing "plans"/"audit_log"
+
+    store.load_json(wrong_shape_path)
+    assert store.get_student("STU1") == student
+    assert store.get_plan("STU1") == plan
+    assert store.audit_log == [audit_entry]
 
 
 def test_persist_path_loads_on_construction(tmp_path):
