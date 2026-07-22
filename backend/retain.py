@@ -49,7 +49,9 @@ def recall_estimate(topic: TopicMemory, today: datetime = None) -> float:
     if today is None:
         today = datetime.now()
         
-    days_since_learned = (today - topic.learned_on).days
+    t_naive = today.replace(tzinfo=None)
+    learned_naive = topic.learned_on.replace(tzinfo=None)
+    days_since_learned = (t_naive - learned_naive).days
     days_since_learned = max(0, days_since_learned)
     interval = max(topic.interval, 1)
     return math.exp(-days_since_learned / (interval * 1.4))
@@ -65,11 +67,15 @@ def due_topics(state: StudentState, today: datetime = None) -> List[Dict[str, An
     due = []
     for t in state.topics:
         recall = recall_estimate(t, today)
-        is_overdue = t.next_review <= today
+        t_naive = today.replace(tzinfo=None)
+        nr_naive = t.next_review.replace(tzinfo=None)
+        is_overdue = nr_naive <= t_naive
         is_low_recall = recall < 0.6
         
         if is_overdue or is_low_recall:
-            days_since_learned = (today - t.learned_on).days
+            t_naive = today.replace(tzinfo=None)
+            learned_naive = t.learned_on.replace(tzinfo=None)
+            days_since_learned = (t_naive - learned_naive).days
             days_since_learned = max(0, days_since_learned)
             due.append({
                 "topic": t.topic,

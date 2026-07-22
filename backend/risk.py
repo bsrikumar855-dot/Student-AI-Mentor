@@ -60,12 +60,13 @@ def calculate_risk(student: StudentState) -> RiskResult:
     score01 = sum(weighted_terms.values())
     score = round(score01 * 100, 1)
 
-    if score < 33:
-        level = "Low"
-    elif score < 66:
+    if score >= 45.0:
+        level = "High"
+    elif score >= 25.0:
         level = "Medium"
     else:
-        level = "High"
+        level = "Low"
+
 
     # Find dominant term
     dominant = max(weighted_terms, key=lambda k: weighted_terms[k])

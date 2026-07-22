@@ -15,7 +15,7 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
     # 1. Students sheet
     students = []
     
-    # Hero: Aisha
+    # Hero: Aisha (Baseline Medium risk ~34.6)
     students.append({
         "student_id": "STU_HERO",
         "name": "Aisha",
@@ -28,18 +28,52 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         "skills": "python,git,sql"
     })
     
-    # Other 20 students
+    # Generate 20 students with explicit bands
+    # STU1001-STU1004: High Risk (>= 45)
+    # STU1005-STU1009: Medium Risk (25-45)
+    # STU1010-STU1020: Low Risk (< 25)
     for i in range(1, num_students + 1):
+        sid = f"STU{1000+i}"
+        name = f"Student {i}"
+        
+        if i <= 4:
+            # High Risk
+            cgpa = 6.1
+            attendance = 0.72
+            days_since_active = 8
+            days_since_commit = 12
+            days_since_linkedin = 15
+            goals_met_streak = 0
+            skills = "python"
+        elif i <= 9:
+            # Medium Risk
+            cgpa = 7.2
+            attendance = 0.82
+            days_since_active = 4
+            days_since_commit = 5
+            days_since_linkedin = 8
+            goals_met_streak = 2
+            skills = "python,git"
+        else:
+            # Low Risk
+            cgpa = 8.8
+            attendance = 0.95
+            days_since_active = 0
+            days_since_commit = 0
+            days_since_linkedin = 0
+            goals_met_streak = 5
+            skills = "python,git,sql"
+            
         students.append({
-            "student_id": f"STU{1000+i}",
-            "name": f"Student {i}",
-            "cgpa": round(6.0 + (i * 0.15) % 3.8, 2),
-            "attendance": round(0.7 + (i * 0.02) % 0.28, 2),
-            "days_since_active": i % 6,
-            "days_since_commit": i % 12,
-            "days_since_linkedin": i % 18,
-            "goals_met_streak": i % 8,
-            "skills": "python,git" if i % 2 == 0 else "sql,java"
+            "student_id": sid,
+            "name": name,
+            "cgpa": cgpa,
+            "attendance": attendance,
+            "days_since_active": days_since_active,
+            "days_since_commit": days_since_commit,
+            "days_since_linkedin": days_since_linkedin,
+            "goals_met_streak": goals_met_streak,
+            "skills": skills
         })
         
     df_students = pd.DataFrame(students)
@@ -58,11 +92,34 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
     # Other students scores
     for i in range(1, num_students + 1):
         sid = f"STU{1000+i}"
-        scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 70.0 + i % 20})
-        scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 72.0 + i % 22})
-        scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 60.0 + i % 25})
-        scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 65.0 + i % 28})
-        
+        if i <= 4:
+            # High Risk scores: very low, declining
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 65.0})
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 48.0})
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 3, "score": 30.0})
+            
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 70.0})
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 50.0})
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 3, "score": 35.0})
+        elif i <= 9:
+            # Medium Risk scores: some decline
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 75.0})
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 70.0})
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 3, "score": 55.0})
+            
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 72.0})
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 75.0})
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 3, "score": 70.0})
+        else:
+            # Low Risk scores: high, steady
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 85.0})
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 88.0})
+            scores.append({"student_id": sid, "subject": "Python", "test_no": 3, "score": 90.0})
+            
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 82.0})
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 85.0})
+            scores.append({"student_id": sid, "subject": "DSA", "test_no": 3, "score": 88.0})
+            
     df_scores = pd.DataFrame(scores)
     
     # 3. Exams sheet
@@ -79,13 +136,31 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
     # Other students exams
     for i in range(1, num_students + 1):
         sid = f"STU{1000+i}"
-        exams.append({
-            "student_id": sid,
-            "subject": "Python" if i % 2 == 0 else "DSA",
-            "date": (datetime.now() + timedelta(days=15)).isoformat(),
-            "days_to_exam": 15,
-            "completion": 0.6
-        })
+        if i <= 4:
+            # High Risk exams: close by, low completion
+            exams.append({
+                "student_id": sid,
+                "subject": "DSA",
+                "date": (datetime.now() + timedelta(days=5)).isoformat(),
+                "days_to_exam": 5,
+                "completion": 0.2
+            })
+        elif i <= 9:
+            exams.append({
+                "student_id": sid,
+                "subject": "DSA",
+                "date": (datetime.now() + timedelta(days=10)).isoformat(),
+                "days_to_exam": 10,
+                "completion": 0.45
+            })
+        else:
+            exams.append({
+                "student_id": sid,
+                "subject": "DSA",
+                "date": (datetime.now() + timedelta(days=20)).isoformat(),
+                "days_to_exam": 20,
+                "completion": 0.85
+            })
     df_exams = pd.DataFrame(exams)
     
     # 4. Topics sheet
