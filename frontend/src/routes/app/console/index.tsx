@@ -314,7 +314,7 @@ export const ConsolePage: React.FC<ConsolePageProps> = ({ onNavigateToStudentDet
                 <span>Ingest Cohort Telemetry</span>
               </h3>
               <p className="text-xs text-text-dim">
-                Select a CSV spreadsheet format cohort file. Replaces simulated database values.
+                Select an Excel (.xlsx) format cohort file. Replaces simulated database values.
               </p>
             </div>
 
@@ -322,7 +322,7 @@ export const ConsolePage: React.FC<ConsolePageProps> = ({ onNavigateToStudentDet
               <div className="border border-dashed border-line hover:border-decide/50 rounded-lg p-6 text-center space-y-2 transition-colors cursor-pointer relative bg-surface-2">
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".xlsx"
                   onChange={handleFileChange}
                   className="absolute inset-0 opacity-0 cursor-pointer"
                   required
@@ -332,10 +332,10 @@ export const ConsolePage: React.FC<ConsolePageProps> = ({ onNavigateToStudentDet
                   {selectedFile ? (
                     <strong className="text-guard font-semibold">{selectedFile.name}</strong>
                   ) : (
-                    <span>Drag and drop cohort.csv or click to browse</span>
+                    <span>Drag and drop cohort.xlsx or click to browse</span>
                   )}
                 </div>
-                <span className="text-[10px] text-text-dim block">Supports UTF-8 CSV up to 10MB</span>
+                <span className="text-[10px] text-text-dim block">Supports .xlsx up to 10MB</span>
               </div>
 
               <button
