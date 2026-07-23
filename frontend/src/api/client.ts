@@ -150,6 +150,33 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       ease_factor: item.ease_factor || 2.5,
       due_date: item.due_date || item.next_review || new Date().toISOString(),
     }));
+  } else if (/\/reviews\/[^/]+\/grade$/.test(requestPath)) {
+    // POST .../grade returns a bare backend TopicMemory ({topic, learned_on, ef,
+    // reps, interval, next_review}) - map field names and add the subject the
+    // schema requires but the backend doesn't track per-review.
+    data = {
+      ...data,
+      subject: data.subject || 'General',
+      why: data.why || '',
+      ease_factor: data.ef ?? data.ease_factor ?? 2.5,
+      due_date: data.next_review || data.due_date || new Date().toISOString(),
+    };
+  } else if (/\/interventions\/[^/]+\/review$/.test(requestPath)) {
+    // POST .../review returns {intervention_id, status, reviewed_by, at} - derive
+    // the InterventionSchema fields the backend doesn't echo back. auto is always
+    // false here since the backend rejects reviewing auto interventions.
+    const parts = String(data.intervention_id || '').split(':');
+    data = {
+      ...data,
+      id: data.intervention_id,
+      student_id: parts[0] || '',
+      student_name: '',
+      action: parts.slice(1).join(':') || '',
+      why: '',
+      kind: 'academic',
+      auto: false,
+      approved: true,
+    };
   }
 
   if (schema) {
