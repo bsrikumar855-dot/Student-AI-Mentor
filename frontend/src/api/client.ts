@@ -59,7 +59,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       email: data.email || `${data.name?.toLowerCase().replace(/\s+/g, '') || 'student'}@drishta.edu`,
       risk: data.risk ? {
         ...data.risk,
-        level: (data.risk.level || 'low').toLowerCase()
+        level: (data.risk.level || 'low').toLowerCase() === 'medium' ? 'med' : (data.risk.level || 'low').toLowerCase()
       } : { level: 'low', score: 0, reasons: [] },
       subjects: (data.subjects || []).map((s: any) => ({
         ...s,
@@ -93,20 +93,22 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       title: s.task,
       location: 'Virtual',
     }));
-    const firstIntervention = data.interventions && data.interventions[0] ? {
-      id: data.interventions[0].id,
+    const interventions = (data.interventions || []).map((i: any) => ({
+      id: i.id,
       student_id: targetId,
-      action: data.interventions[0].action,
-      why: data.interventions[0].why,
-      kind: data.interventions[0].kind,
-      auto: data.interventions[0].auto,
-      approved: data.interventions[0].reviewed || false,
-    } : undefined;
+      action: i.action,
+      why: i.why,
+      kind: i.kind,
+      auto: i.auto,
+      approved: i.reviewed || false,
+    }));
+    const firstIntervention = interventions.length > 0 ? interventions[0] : undefined;
 
     data = {
       ...data,
       missions,
       schedule,
+      interventions,
       intervention_triggered: Boolean(data.intervention_triggered),
       intervention: firstIntervention,
     };
@@ -134,7 +136,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       student_id: s.student_id,
       name: s.name,
       risk: {
-        level: (s.risk?.level || 'low').toLowerCase(),
+        level: (s.risk?.level || 'low').toLowerCase() === 'medium' ? 'med' : (s.risk?.level || 'low').toLowerCase(),
         score: s.risk?.score || 0,
         reasons: s.risk?.reasons || [],
       },

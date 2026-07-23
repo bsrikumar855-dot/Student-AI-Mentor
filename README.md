@@ -69,4 +69,20 @@ Or on Linux/macOS:
 ```bash
 GEMINI_API_KEY=... GEMINI_MODEL=gemini-flash-latest python -m pytest tests/test_llm_live.py
 ```
+## Run the demo
 
+To run the Drishta application in full end-to-end integration mode:
+
+### Terminal 1: Start the Backend Server
+```bash
+python -m uvicorn backend.main:app --port 8000
+```
+*Note: The backend automatically ingests `backend/data/cohort.xlsx` on startup.*
+
+### Terminal 2: Start the Frontend Developer Server
+```bash
+cd frontend
+npm install
+npm run dev
+```
+*Note: The frontend server proxies API calls to the backend on port 8000 automatically.*

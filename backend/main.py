@@ -123,6 +123,7 @@ def generate_plan_for_student(student: StudentState) -> Plan:
         computed_at=datetime.now(timezone.utc).isoformat(),
     ))
 
+    store.save_student(student)
     return plan
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED, dependencies=[Depends(ingest_limiter)])

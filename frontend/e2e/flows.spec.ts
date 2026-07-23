@@ -8,7 +8,7 @@ test.describe('Drishta E2E Core Journeys', () => {
     await expect(page.locator('h1')).toContainText('Drishta');
 
     // 2. Click quick enter shortcut for Student Companion
-    await page.getByRole('button', { name: 'Student Panel' }).click();
+    await page.getByRole('button', { name: 'Enter as Student (Aisha)' }).click();
     await page.waitForURL('**/app/today');
 
     // 3. Confirm daily greeting and targets load
@@ -38,7 +38,7 @@ test.describe('Drishta E2E Core Journeys', () => {
   test('Flow B: Faculty opens reviews queue, approves manual intervention, and clears queue row', async ({ page }) => {
     // 1. Load login page and bypass via Faculty Console quick enter
     await page.goto('/app/login');
-    await page.getByRole('button', { name: 'Faculty Console' }).click();
+    await page.getByRole('button', { name: 'Enter as Faculty' }).click();
     await page.waitForURL('**/app/console*');
 
     // 2. Click Oversight Queue to view pending safety override targets

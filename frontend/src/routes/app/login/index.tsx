@@ -10,7 +10,7 @@ import apiClient from '../../../api/client';
 
 const loginSchema = z.object({
   email: z.string().email('Provide a valid university email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(1, 'Password is required'),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -22,6 +22,7 @@ interface LoginProps {
 export const LoginPage: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const { toast } = useToast();
   const [loading, setLoading] = React.useState(false);
+  const [selectedRole, setSelectedRole] = React.useState<'student' | 'faculty'>('student');
 
   const {
     register,
@@ -42,13 +43,10 @@ export const LoginPage: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
       localStorage.setItem('drishta_auth_token', resData.token);
       localStorage.setItem('drishta_student_id', resData.student_id);
-      
-      // Determine if logging in as faculty or student
-      const role = data.email.includes('faculty') || data.email.includes('admin') ? 'faculty' : 'student';
-      localStorage.setItem('drishta_role', role);
+      localStorage.setItem('drishta_role', selectedRole);
 
       toast('Authentication Successful', `Logged in as ${resData.name || data.email}`, 'guard');
-      onLoginSuccess(role);
+      onLoginSuccess(selectedRole);
     } catch (err: any) {
       toast('Login Failed', err.message || 'Check your credentials', 'error');
     } finally {
@@ -124,6 +122,35 @@ export const LoginPage: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               )}
             </div>
 
+            {/* Role Toggle Switch */}
+            <div className="space-y-1">
+              <span className="text-xs text-text-dim uppercase tracking-wider block">
+                Role Select
+              </span>
+              <div className="flex space-x-6 py-1">
+                <label className="flex items-center space-x-2 text-sm text-text cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="role-toggle"
+                    checked={selectedRole === 'student'}
+                    onChange={() => setSelectedRole('student')}
+                    className="w-4 h-4 accent-decide cursor-pointer"
+                  />
+                  <span>Student View</span>
+                </label>
+                <label className="flex items-center space-x-2 text-sm text-text cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="role-toggle"
+                    checked={selectedRole === 'faculty'}
+                    onChange={() => setSelectedRole('faculty')}
+                    className="w-4 h-4 accent-decide cursor-pointer"
+                  />
+                  <span>Faculty Console</span>
+                </label>
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -147,14 +174,14 @@ export const LoginPage: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               className="py-2 px-3 border border-speak/20 hover:border-speak bg-speak/5 hover:bg-speak/10 text-speak rounded-md text-xs font-semibold transition cursor-pointer flex items-center justify-center space-x-1.5"
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>Student Panel</span>
+              <span>Enter as Student (Aisha)</span>
             </button>
             <button
               onClick={() => loginAsDemo('faculty')}
               className="py-2 px-3 border border-guard/20 hover:border-guard bg-guard/5 hover:bg-guard/10 text-guard rounded-md text-xs font-semibold transition cursor-pointer flex items-center justify-center space-x-1.5"
             >
               <Shield className="w-3.5 h-3.5" />
-              <span>Faculty Console</span>
+              <span>Enter as Faculty</span>
             </button>
           </div>
         </GlassPanel>
