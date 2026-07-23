@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStudentState } from '../../../api/hooks';
+import { useStudentState, useCodingProfile } from '../../../api/hooks';
 import { CompletionRing } from '../../../design/charts';
 import { BentoGrid, BentoCard } from '../../../design/bento';
 import { RiskCard, EmptyState, CodingActivityCard, ListPanel, ListRow } from '../../../components/components';
@@ -25,6 +25,7 @@ const Linkedin = LinkedinIcon;
 export const MePage: React.FC = () => {
   const studentId = localStorage.getItem('drishta_student_id') || 'STU_HERO';
   const { data: state, isLoading, error } = useStudentState(studentId);
+  const { data: codingProfile, isLoading: codingLoading } = useCodingProfile(studentId);
 
   if (isLoading) {
     return (
@@ -131,12 +132,15 @@ export const MePage: React.FC = () => {
             </div>
           </BentoCard>
 
-          {/* Counter 3: LeetCode Inactivity */}
+          {/* Counter 3: Codeforces Inactivity */}
           <BentoCard size="none" className="p-5 flex flex-col items-center justify-center text-center space-y-2">
             <Terminal className="w-6 h-6 text-speak mb-1" />
-            <span className="text-[10px] text-text-dim uppercase tracking-wider">LeetCode Gap</span>
+            <span className="text-[10px] text-text-dim uppercase tracking-wider">Codeforces Gap</span>
             <div className="flex items-baseline space-x-0.5">
-              <Metric value={state.days_since_leetcode} className="text-2xl font-bold" />
+              <Metric
+                value={codingProfile?.codeforces && codingProfile.codeforces.last_active_days >= 0 ? codingProfile.codeforces.last_active_days : '—'}
+                className="text-2xl font-bold"
+              />
               <span className="text-[10px] text-text-dim font-mono">days</span>
             </div>
           </BentoCard>
@@ -152,9 +156,9 @@ export const MePage: React.FC = () => {
           </BentoCard>
         </div>
 
-        {/* 5. Coding Activity Detail (ContributionStrip & Solved counts) */}
+        {/* 5. Coding Activity Detail (real Codeforces stats + GitHub push recency) */}
         <BentoCard size="wide" className="!p-0 border-0 shadow-none bg-transparent">
-          <CodingActivityCard state={state} />
+          <CodingActivityCard state={state} codingProfile={codingProfile} codingLoading={codingLoading} />
         </BentoCard>
 
       </BentoGrid>

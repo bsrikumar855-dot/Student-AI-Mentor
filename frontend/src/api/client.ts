@@ -61,12 +61,6 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
         days_since_linkedin: data.days_since_linkedin || 0,
       },
       goals_met_streak: data.goals_met_streak || 0,
-      days_since_leetcode: data.days_since_leetcode || 2,
-      leetcode_solved_count: data.leetcode_solved_count || 142,
-      contribution_weeks: data.contribution_weeks || Array.from({ length: 12 }, (_, i) => ({
-        week_start: new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        commit_count: [4, 2, 0, 8, 5, 0, 1, 3, 6, 2, 0, 5][i] || 0
-      })).reverse(),
     };
   } else if (requestPath.endsWith('/plan') || requestPath.endsWith('/plan/generate')) {
     const targetId = requestPath.split('/')[2] || data.student_id || 'STU_HERO';

@@ -9,13 +9,15 @@ import {
   PredictionResultSchema,
   CohortStudentSchema,
   InterventionSchema,
+  CodingProfileSchema,
   type StudentState,
   type Plan,
   type TopicMemory,
   type InternshipMatch,
   type PredictionResult,
   type CohortStudent,
-  type Intervention
+  type Intervention,
+  type CodingProfile
 } from './schemas';
 import { z } from 'zod';
 
@@ -166,6 +168,18 @@ export function useInternships(studentId: string) {
     queryKey: ['internships', studentId],
     queryFn: () => apiClient.get<InternshipMatch[]>(`/students/${studentId}/internships`, z.array(InternshipMatchSchema)),
     enabled: !!studentId && hasGithubConsent, // Gating: won't execute if consent is disabled
+  });
+}
+
+// 6b. Fetch Coding Platform Profile (Codeforces) - GATED BY GITHUB CONSENT, same
+// bucket as internships since both are "external developer profile" data.
+export function useCodingProfile(studentId: string) {
+  const hasGithubConsent = useConsentStore((state) => state.github);
+
+  return useQuery({
+    queryKey: ['coding', studentId],
+    queryFn: () => apiClient.get<CodingProfile>(`/students/${studentId}/coding`, CodingProfileSchema),
+    enabled: !!studentId && hasGithubConsent,
   });
 }
 

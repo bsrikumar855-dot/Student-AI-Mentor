@@ -11,8 +11,7 @@ import {
 } from 'lucide-react';
 import { Metric, WhyChip, RiskBand, KindTag, SegmentedBar } from '../design/primitives';
 import { BentoCard } from '../design/bento';
-import { ContributionStrip } from '../design/charts';
-import type { StudentRisk, DailyTarget, Intervention, TopicMemory, StudentState } from '../api/schemas';
+import type { StudentRisk, DailyTarget, Intervention, TopicMemory, StudentState, CodingProfile } from '../api/schemas';
 
 // 1. StreakPip - shows consecutive goals met
 export const StreakPip: React.FC<{ streak: number }> = ({ streak }) => {
@@ -325,25 +324,26 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
-// 9. CodingActivityCard - displays git & leetcode commits/solved counts
+// 9. CodingActivityCard - displays real GitHub push recency and Codeforces stats
 interface CodingActivityCardProps {
   state: StudentState;
+  codingProfile?: CodingProfile | null;
+  codingLoading?: boolean;
 }
 
-export const CodingActivityCard: React.FC<CodingActivityCardProps> = ({ state }) => {
-  const isRecentlyActive = state.activity.days_since_commit <= 7 || state.days_since_leetcode <= 7;
+export const CodingActivityCard: React.FC<CodingActivityCardProps> = ({ state, codingProfile, codingLoading }) => {
+  const cf = codingProfile?.codeforces;
+  const isRecentlyActive = state.activity.days_since_commit <= 7 || (!!cf && cf.last_active_days >= 0 && cf.last_active_days <= 7);
   const borderClass = isRecentlyActive
     ? 'border border-guard/30 bg-guard-lo'
     : 'border border-line bg-surface';
-
-  const latestWeekCommits = state.contribution_weeks[state.contribution_weeks.length - 1]?.commit_count || 0;
 
   return (
     <BentoCard size="none" className={`p-4 space-y-4 rounded-xl ${borderClass}`}>
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-xs font-bold text-text uppercase tracking-wider">Coding Activity Signal</h3>
-          <span className="text-[10px] text-text-dim">Git Commits & LeetCode Submissions</span>
+          <span className="text-[10px] text-text-dim">GitHub Pushes & Codeforces Submissions</span>
         </div>
         {isRecentlyActive ? (
           <span className="text-[10.5px] bg-guard text-white px-2 py-0.5 rounded font-mono font-bold uppercase">
@@ -356,39 +356,42 @@ export const CodingActivityCard: React.FC<CodingActivityCardProps> = ({ state })
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {/* LeetCode count */}
-        <div className="space-y-1">
-          <span className="text-[10px] text-text-dim uppercase font-mono">LeetCode Solved</span>
-          <div className="flex items-baseline space-x-1">
-            <Metric value={state.leetcode_solved_count} className="text-xl font-bold" />
-            <span className="text-[10px] text-text-dim font-medium ml-1">problems</span>
+      {codingLoading ? (
+        <div className="text-[10.5px] text-text-dim font-mono py-2">Loading Codeforces profile...</div>
+      ) : cf ? (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <span className="text-[10px] text-text-dim uppercase font-mono">Codeforces Solved</span>
+            <div className="flex items-baseline space-x-1">
+              <Metric value={cf.solved_count} className="text-xl font-bold" />
+              <span className="text-[10px] text-text-dim font-medium ml-1">problems</span>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[10px] text-text-dim uppercase font-mono">Last Submission</span>
+            <div className="flex items-baseline space-x-1">
+              <Metric value={cf.last_active_days >= 0 ? cf.last_active_days : '—'} className="text-xl font-bold" />
+              <span className="text-[10px] text-text-dim font-medium ml-1">
+                {cf.last_active_days >= 0 ? 'days ago' : 'unknown'}
+              </span>
+            </div>
           </div>
         </div>
-
-        {/* LeetCode freshness */}
-        <div className="space-y-1">
-          <span className="text-[10px] text-text-dim uppercase font-mono">Last Submission</span>
-          <div className="flex items-baseline space-x-1">
-            <Metric value={state.days_since_leetcode} className="text-xl font-bold" />
-            <span className="text-[10px] text-text-dim font-medium ml-1">days ago</span>
-          </div>
+      ) : (
+        <div className="text-[10.5px] text-text-dim font-mono py-2 leading-snug">
+          {codingProfile?.note || 'No Codeforces handle linked for this student.'}
         </div>
-      </div>
-
-      {/* Contribution Grid */}
-      <div className="space-y-2 pt-2 border-t border-line">
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] text-text-dim uppercase font-mono">Commit Calendar</span>
-          <span className="text-[10px] font-mono text-text-dim">12w History</span>
-        </div>
-        <ContributionStrip weeks={state.contribution_weeks} />
-      </div>
+      )}
 
       {/* Status String */}
-      <div className="text-[10.5px] text-text-dim leading-snug pt-1 font-mono">
-        Last push <Metric value={state.activity.days_since_commit} className="font-bold" />d ago ·{' '}
-        <Metric value={latestWeekCommits} className="font-bold" /> commits this week
+      <div className="text-[10.5px] text-text-dim leading-snug pt-1 border-t border-line font-mono">
+        Last push <Metric value={state.activity.days_since_commit} className="font-bold" />d ago
+        {cf && (
+          <>
+            {' '}· handle <span className="font-bold text-text">{cf.handle}</span> ({cf.rank}, rating {cf.rating})
+          </>
+        )}
       </div>
     </BentoCard>
   );

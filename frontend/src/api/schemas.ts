@@ -51,12 +51,21 @@ export const StudentStateSchema = z.object({
   exams: z.array(ExamStateSchema).default([]),
   activity: ActivityStateSchema.default({ days_since_active: 0, days_since_commit: 0, days_since_linkedin: 0 }),
   goals_met_streak: z.number().default(0),
-  days_since_leetcode: z.number().default(2),
-  leetcode_solved_count: z.number().default(142),
-  contribution_weeks: z.array(z.object({
-    week_start: z.string(),
-    commit_count: z.number(),
-  })).default([]),
+}).passthrough();
+
+export const CodeforcesProfileSchema = z.object({
+  handle: z.string(),
+  rating: z.number().default(0),
+  max_rating: z.number().default(0),
+  rank: z.string().default('unrated'),
+  solved_count: z.number().default(0),
+  last_active_days: z.number().default(-1),
+  source: z.string().optional(),
+}).passthrough();
+
+export const CodingProfileSchema = z.object({
+  codeforces: CodeforcesProfileSchema.nullable(),
+  note: z.string().optional(),
 }).passthrough();
 
 export const DailyTargetSchema = z.object({
@@ -154,6 +163,8 @@ export type SubjectState = z.infer<typeof SubjectStateSchema>;
 export type ExamState = z.infer<typeof ExamStateSchema>;
 export type ActivityState = z.infer<typeof ActivityStateSchema>;
 export type StudentState = z.infer<typeof StudentStateSchema>;
+export type CodeforcesProfile = z.infer<typeof CodeforcesProfileSchema>;
+export type CodingProfile = z.infer<typeof CodingProfileSchema>;
 export type DailyTarget = z.infer<typeof DailyTargetSchema>;
 export type ScheduleItem = z.infer<typeof ScheduleItemSchema>;
 export type Intervention = z.infer<typeof InterventionSchema>;

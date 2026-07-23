@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStudentState, useStudentPlan, useGeneratePlan } from '../../../api/hooks';
+import { useStudentState, useStudentPlan, useGeneratePlan, useCodingProfile } from '../../../api/hooks';
 import { Metric, KindTag } from '../../../design/primitives';
 import { BentoGrid, BentoCard } from '../../../design/bento';
 import { RiskCard, EmptyState, useToast, CodingActivityCard, ListPanel, ListRow } from '../../../components/components';
@@ -18,6 +18,7 @@ export const ConsoleDetailPage: React.FC<ConsoleDetailProps> = ({
 }) => {
   const { data: state, isLoading: stateLoading, error: stateError } = useStudentState(studentId);
   const { data: plan, isLoading: planLoading, error: planError } = useStudentPlan(studentId);
+  const { data: codingProfile, isLoading: codingLoading } = useCodingProfile(studentId);
   const generatePlanMutation = useGeneratePlan(studentId);
   const { toast } = useToast();
 
@@ -102,7 +103,7 @@ export const ConsoleDetailPage: React.FC<ConsoleDetailProps> = ({
             </div>
           </BentoCard>
 
-          <CodingActivityCard state={state} />
+          <CodingActivityCard state={state} codingProfile={codingProfile} codingLoading={codingLoading} />
         </div>
 
         {/* Right Column: subjects and study pathway */}
