@@ -12,7 +12,7 @@ import {
 import { Calendar, Clock, MapPin, Sparkles } from 'lucide-react';
 
 export const TodayPage: React.FC = () => {
-  const studentId = localStorage.getItem('drishta_student_id') || 'student_1';
+  const studentId = localStorage.getItem('drishta_student_id') || 'STU_HERO';
   const { data: state, isLoading: stateLoading, error: stateError } = useStudentState(studentId);
   const { data: plan, isLoading: planLoading, error: planError } = useStudentPlan(studentId);
   const completeTaskMutation = useCompleteTask(studentId);

@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1, // Sequential execution to prevent session state pollution in MSW
+  workers: 1,
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:5173',

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Send, Sparkles, AlertTriangle, Trash2, ShieldAlert } from 'lucide-react';
 
+import apiClient from '../../../api/client';
 import { useChatStore } from '../../../features/mentor/chatStore';
 import { useToast } from '../../../components/components';
 import { BentoGrid, BentoCard } from '../../../design/bento';
@@ -20,7 +21,7 @@ export const MentorPage: React.FC = () => {
     e.preventDefault();
     if (!input.trim() || sending) return;
 
-    const studentId = localStorage.getItem('drishta_student_id') || 'student_1';
+    const studentId = localStorage.getItem('drishta_student_id') || 'STU_HERO';
     const userMessage = input.trim();
     setInput('');
     setSending(true);
@@ -36,21 +37,19 @@ export const MentorPage: React.FC = () => {
     addMessage(userMsgObj);
 
     try {
-      const response = await fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const history = messages.map((m) => ({
+        role: m.sender === 'mentor' ? 'assistant' : 'user',
+        content: m.message,
+      }));
+
+      const data = await apiClient.post<{ reply: string; used_llm: boolean }>(
+        '/chat',
+        {
           student_id: studentId,
           message: userMessage,
-          history: messages
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Mentor service offline');
-      }
-
-      const data = await response.json();
+          history
+        }
+      );
       
       const mentorMsgObj = {
         id: Math.random().toString(36).slice(2),

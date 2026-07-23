@@ -48,7 +48,7 @@ export const ConsoleDetailPage: React.FC<ConsoleDetailProps> = ({
       <div className="max-w-md mx-auto py-10">
         <EmptyState
           title="Telemetry Link Error"
-          description="Failed to resolve specific student directory data blocks. Ensure MSW is online."
+          description="Failed to resolve specific student directory data blocks."
         />
       </div>
     );

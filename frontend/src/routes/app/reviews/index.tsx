@@ -5,7 +5,7 @@ import { ReviewCard, EmptyState, useToast } from '../../../components/components
 import { Brain, CheckCircle } from 'lucide-react';
 
 export const ReviewsPage: React.FC = () => {
-  const studentId = localStorage.getItem('drishta_student_id') || 'student_1';
+  const studentId = localStorage.getItem('drishta_student_id') || 'STU_HERO';
   const { data: reviews, isLoading, error } = useReviews(studentId);
   const gradeMutation = useGradeReview(studentId);
   const { toast } = useToast();
@@ -44,7 +44,7 @@ export const ReviewsPage: React.FC = () => {
       <div className="max-w-md mx-auto py-10">
         <EmptyState
           title="Memory Retrieval Failed"
-          description="Could not establish contact with the SM-2 Spaced Repetition engine. Ensure MSW is online."
+          description="Could not establish contact with the SM-2 Spaced Repetition engine."
         />
       </div>
     );

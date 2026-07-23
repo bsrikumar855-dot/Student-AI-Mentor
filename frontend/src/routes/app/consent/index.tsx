@@ -19,7 +19,7 @@ export const ConsentPage: React.FC = () => {
 
   const handleExportData = () => {
     const data = {
-      user_id: 'student_1',
+      user_id: 'STU_HERO',
       consents: { lms, github, wellness },
       timestamp: new Date().toISOString(),
       collected_records: {

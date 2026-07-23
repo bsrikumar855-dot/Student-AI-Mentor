@@ -52,7 +52,7 @@ export const ConsoleReviewsPage: React.FC = () => {
       <div className="max-w-md mx-auto py-10">
         <EmptyState
           title="Oversight Pipeline Failed"
-          description="Failed to resolve active interventions registry. Ensure MSW server is intercepting."
+          description="Failed to resolve active interventions registry from the backend."
         />
       </div>
     );

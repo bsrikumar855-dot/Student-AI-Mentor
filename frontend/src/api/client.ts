@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const BASE_URL = ''; // Relative path so MSW intercepts locally
+const BASE_URL = ''; // Relative path so Vite proxies API calls to the backend.
 
 interface RequestOptions extends RequestInit {
   schema?: z.ZodType<any, any, any>;
@@ -21,17 +21,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     headers.set('Content-Type', 'application/json');
   }
 
-
-  // Handle mock auth/login directly
-  if (path === '/auth/login') {
-    return { token: 'demo-token', student_id: 'STU_HERO', name: 'Aisha' } as any;
-  }
-
-  // Rewrite student_1 to STU_HERO for compatibility
-  let requestPath = path;
-  if (requestPath.includes('student_1')) {
-    requestPath = requestPath.replace('student_1', 'STU_HERO');
-  }
+  const requestPath = path;
 
   const response = await fetch(`${BASE_URL}${requestPath}`, {
     ...init,
@@ -52,7 +42,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   let data = await response.json();
 
-  // Map backend shapes to frontend-v2 schemas panel by panel
+  // Map backend shapes to frontend-v2 schemas panel by panel.
   if (requestPath.endsWith('/state')) {
     data = {
       ...data,
@@ -79,20 +69,20 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       })).reverse(),
     };
   } else if (requestPath.endsWith('/plan') || requestPath.endsWith('/plan/generate')) {
-    const targetId = requestPath.split('/')[2] || 'STU_HERO';
-    const missions = (data.daily_targets || []).map((t: any) => ({
+    const targetId = requestPath.split('/')[2] || data.student_id || 'STU_HERO';
+    const missions = data.daily_targets ? data.daily_targets.map((t: any) => ({
       id: t.id,
       task: t.task,
       kind: t.kind || 'recovery',
       why: t.why || 'Customized study task',
       why_source: 'decide',
       completed: t.done || false,
-    }));
-    const schedule = (data.schedule || []).map((s: any) => ({
+    })) : (data.missions || []);
+    const schedule = (data.schedule || []).map((s: any) => s.slot ? ({
       time: s.slot,
       title: s.task,
       location: 'Virtual',
-    }));
+    }) : s);
     const firstIntervention = data.interventions && data.interventions[0] ? {
       id: data.interventions[0].id,
       student_id: targetId,
@@ -118,7 +108,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       missions,
       schedule,
       intervention_triggered: Boolean(data.intervention_triggered),
-      intervention: firstIntervention,
+      intervention: data.intervention || firstIntervention,
       interventions: mappedInterventions,
     };
   } else if (requestPath.endsWith('/predictions')) {
@@ -158,7 +148,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       reps: item.reps || 1,
       interval: item.interval || 1,
       ease_factor: item.ease_factor || 2.5,
-      due_date: item.next_review || new Date().toISOString(),
+      due_date: item.due_date || item.next_review || new Date().toISOString(),
     }));
   }
 

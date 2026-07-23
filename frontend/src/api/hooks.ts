@@ -117,7 +117,7 @@ export function useGradeReview(studentId: string) {
     mutationFn: ({ topic, grade }: { topic: string; grade: number }) =>
       apiClient.post<TopicMemory>(
         `/students/${studentId}/reviews/${encodeURIComponent(topic)}/grade`,
-        { grade },
+        { quality: grade },
         TopicMemorySchema
       ),
 
@@ -202,7 +202,11 @@ export function useReviewIntervention() {
 
   return useMutation({
     mutationFn: ({ id, approved, note }: { id: string; approved: boolean; note?: string }) =>
-      apiClient.post<Intervention>(`/interventions/${id}/review`, { approved, note }, InterventionSchema),
+      apiClient.post<Intervention>(
+        `/interventions/${id}/review`,
+        { decision: approved ? 'approve' : 'override', note },
+        InterventionSchema
+      ),
     
     onMutate: async ({ id, approved, note }) => {
       await queryClient.cancelQueries({ queryKey: ['interventions'] });

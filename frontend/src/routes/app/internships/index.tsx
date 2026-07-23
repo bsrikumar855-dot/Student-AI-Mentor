@@ -19,7 +19,7 @@ export const InternshipsPage: React.FC<{
   onNavigateToConsent?: () => void;
   onNavigateToMissions?: () => void;
 }> = ({ onNavigateToConsent, onNavigateToMissions }) => {
-  const studentId = localStorage.getItem('drishta_student_id') || 'student_1';
+  const studentId = localStorage.getItem('drishta_student_id') || 'STU_HERO';
   const hasGithubConsent = useConsentStore((state) => state.github);
   const { setConsent } = useConsentStore();
   const { data: matches, isLoading, error } = useInternships(studentId);
@@ -93,7 +93,7 @@ export const InternshipsPage: React.FC<{
       <div className="max-w-md mx-auto py-10">
         <EmptyState
           title="Career Engine Sync Error"
-          description="Failed to retrieve internship match profiles. Verify MSW handlers status."
+          description="Failed to retrieve internship match profiles from the backend."
         />
       </div>
     );

@@ -97,7 +97,7 @@ export const ConsolePage: React.FC<ConsolePageProps> = ({ onNavigateToStudentDet
       <div className="max-w-md mx-auto py-10">
         <EmptyState
           title="Cohort Registry Offline"
-          description="Failed to resolve student directory records. Confirm MSW handlers are running."
+          description="Failed to resolve student directory records from the backend."
         />
       </div>
     );

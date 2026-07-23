@@ -100,7 +100,7 @@ const AppShell: React.FC<{ children: React.ReactNode; activePath: string; role: 
     : 0;
 
   // Student: count of reviews due today
-  const studentReviews = useReviews('student_1'); // Default student_1
+  const studentReviews = useReviews('STU_HERO');
   const reviewsDueCount = role === 'student' && studentReviews.data
     ? studentReviews.data.length
     : 0;

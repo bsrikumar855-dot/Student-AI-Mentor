@@ -23,7 +23,7 @@ const Github = GithubIcon;
 const Linkedin = LinkedinIcon;
 
 export const MePage: React.FC = () => {
-  const studentId = localStorage.getItem('drishta_student_id') || 'student_1';
+  const studentId = localStorage.getItem('drishta_student_id') || 'STU_HERO';
   const { data: state, isLoading, error } = useStudentState(studentId);
 
   if (isLoading) {
@@ -40,7 +40,7 @@ export const MePage: React.FC = () => {
       <div className="max-w-md mx-auto py-10">
         <EmptyState
           title="Telemetry Load Interrupted"
-          description="Failed to retrieve student performance state from the LMS API gateway. Ensure MSW is initialized."
+          description="Failed to retrieve student performance state from the LMS API gateway."
         />
       </div>
     );

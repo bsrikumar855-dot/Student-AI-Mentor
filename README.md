@@ -26,9 +26,13 @@ To verify the skeleton setup:
 
 3. **Start the API Server**:
    ```bash
+   cd Student-AI-Mentor
    uvicorn backend.main:app --reload
    ```
-   *Note: Every API endpoint returns HTTP 501 Not Implemented in this skeleton phase.*
+   If you want to launch it from another directory, point Uvicorn at the repo root:
+   ```powershell
+   uvicorn backend.main:app --reload --app-dir "C:\Users\SUCHIT CHOPADE\OneDrive\Desktop\Student-AI-Mentor"
+   ```
 
 ---
 

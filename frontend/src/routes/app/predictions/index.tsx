@@ -5,7 +5,7 @@ import { BentoGrid, BentoCard } from '../../../design/bento';
 import { TrendingUp, Clock, HelpCircle } from 'lucide-react';
 
 export const PredictionsPage: React.FC = () => {
-  const studentId = localStorage.getItem('drishta_student_id') || 'student_1';
+  const studentId = localStorage.getItem('drishta_student_id') || 'STU_HERO';
   const { data: forecast, isLoading, error } = usePredictions(studentId);
 
   if (isLoading) {
@@ -22,7 +22,7 @@ export const PredictionsPage: React.FC = () => {
       <div className="max-w-md mx-auto py-10">
         <EmptyState
           title="Prediction Engine Offline"
-          description="Failed to resolve GPA projections from the core calculation models. Ensure MSW is operational."
+          description="Failed to resolve GPA projections from the backend calculation models."
         />
       </div>
     );
