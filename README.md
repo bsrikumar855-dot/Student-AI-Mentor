@@ -1,76 +1,205 @@
-#  Drishta- Sees the student, Shows the reason
+# Drishta
 
-Drishta is a proactive student mentoring system that scores academic risk, schedules study plans, tracks spaced repetition review cards, matches students with internships, and handles student-faculty intervention alerts. 
+**An explainable, signal-based early-warning system for student mentors.**
 
-It is designed with a **deterministic core** running standard Python logic (zero LLM dependencies), coupled with an isolated **natural language layer** that phrases student outreach and handles agent chat.
-
-## Tech Stack
-- **Backend**: FastAPI, Uvicorn, Pydantic v2
-- **Data & Math**: Pandas, OpenPyXL, JSONSchema
-- **Testing**: PyTest
-
-## Phase 1 Verification
-
-To verify the skeleton setup:
-
-1. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Run Tests**:
-   ```bash
-   python -m pytest
-   ```
-   *Expected output: 9 passed (contracts + LLM checks), 7 skipped (behavior stubs).*
-
-3. **Start the API Server**:
-   ```bash
-   cd Student-AI-Mentor
-   uvicorn backend.main:app --reload
-   ```
-   If you want to launch it from another directory, point Uvicorn at the repo root:
-   ```powershell
-   uvicorn backend.main:app --reload --app-dir "C:\Users\SUCHIT CHOPADE\OneDrive\Desktop\Student-AI-Mentor"
-   ```
+Drishta continuously tracks academic and engagement signals for every student in a cohort, converts them into a transparent risk score, forecasts where each student is headed, and closes the loop by turning risk into action — automatically.
 
 ---
 
-## 3-Person Team Split Plan (Phase 2)
+## Table of Contents
 
-To parallelize development during the hackathon, the work can be split among three members:
+- [Why Drishta](#why-drishya)
+- [How It Works](#how-it-works)
+- [Features](#features)
+- [API Reference](#api-reference)
+- [Getting Started](#getting-started)
+- [Authentication](#authentication)
+- [Testing](#testing)
+- [Project Status & Roadmap](#project-status--roadmap)
+- [Tech Stack](#tech-stack)
 
-### 1. Developer A: Ingestion & Data Store (`ingest.py`, `store.py`, `generate_cohort.py`)
-- **Focus**: Data loading, generation, and persistence.
-- **Tasks**:
-  - Implement synthetic data generation (`generate_cohort.py`) that exports realistic grades, attendance, and activity.
-  - Implement ingestion parser (`ingest.py`) to parse Excel spreadsheet data into Pydantic models.
-  - Set up in-memory CRUD operations and JSON persistence in `store.py`.
+---
 
-### 2. Developer B: Algorithmic Core (`risk.py`, `predict.py`, `retain.py`, `internships.py`)
-- **Focus**: Deterministic rules engines, predictions, and spaced repetition.
-- **Tasks**:
-  - Implement math-based risk scores using weighted attributes (grades trend, attendance, streak).
-  - Implement moving average/linear projection for GPAs.
-  - Implement SM-2 algorithm for card reviews.
-  - Implement skill & grade matching logic for internship recommendations.
+## Why Drishta
 
-### 3. Developer C: LLM, API, and Frontend Integration (`language.py`, `main.py`, Frontend React)
-- **Focus**: Natural language generation, API implementation, and UI.
-- **Tasks**:
-  - Implement isolated LLM calling in `language.py` with custom prompt formatting, including dynamic text-based template degradation if API keys are missing.
-  - Connect FastAPI endpoints in `main.py` to the store and decision components.
-  - Build React components for the Student view and the Faculty At-Risk dashboard.
+Academic decline is gradual, but institutional response is not. A student's grades, attendance, and engagement erode over weeks — sometimes months — before a mentor, advisor, or system takes notice. By then, the intervention window has already narrowed from course correction to damage control.
 
-## Verification of LLM Layer
-To test the live Gemini integration locally, run:
-```bash
-$env:GEMINI_API_KEY="AIzaSy..."
-$env:GEMINI_MODEL="gemini-flash-latest"
-python -m pytest tests/test_llm_live.py
+This isn't a data problem. Most institutions already collect attendance, grades, and activity logs. It's a **synthesis problem** — nobody is continuously converting scattered signals into a single, explainable answer to the question every mentor actually needs answered:
+
+> *"Which of my students needs me this week, and why?"*
+
+**Why existing tools fall short:**
+
+| Tool | Limitation |
+|---|---|
+| LMS platforms | Reactive — grades are visible only after they're posted, no forward view |
+| Spreadsheets / manual check-ins | Doesn't scale past a handful of students, no memory of prior state |
+| Generic analytics dashboards | Numbers without reasoning — a risk score with no explanation isn't actionable |
+
+The need isn't more data. It's a system that **watches continuously, explains itself, and closes the loop back to action.**
+
+---
+
+## How It Works
+
+```mermaid
+flowchart LR
+    A[Data Sources] --> B[Risk Engine]
+    B --> C[Prediction Model]
+    C --> D[Mentor Dashboard]
+    D --> E[Plan / Intervention]
+    E -->|Task completed| A
 ```
-Or on Linux/macOS:
+
+1. **Track** — attendance, grade trends, syllabus completion, spaced-repetition recall, and coding activity are pulled continuously.
+2. **Score** — a transparent, weighted risk engine converts raw signals into a single 0–100 score, with every contributing factor shown in plain language.
+3. **Predict** — forward-looking exam and GPA forecasts, based on real trend data.
+4. **Act** — auto-generated study plans and mentor interventions turn risk into a concrete next step.
+5. **Close the loop** — completing a plan task automatically resets activity recency and re-triggers risk recalculation, so the system never goes stale.
+
+---
+
+## Features
+
+- **Explainable risk scoring** — every score ships with a full weighted breakdown (score gap, syllabus completion, activity recency, grade trend, coding activity), not just a number.
+- **Forecasting** — per-subject exam score projection and overall GPA trajectory, computed from real historical trend data.
+- **Spaced-repetition tracking** — SM-2–based review scheduling per topic (interval, ease factor, repetitions).
+- **Auto-generated study plans** — daily targets tied to each student's specific risk factors.
+- **Mentor intervention workflow** — a real approval/dismissal loop, role-gated by `X-User-Role`.
+- **Conversational access** — a chat endpoint grounded in each student's actual state, not generic responses.
+- **Career signals** — internship matching and coding-platform activity (Codeforces), with graceful offline fallback.
+- **Cohort ingestion** — bulk-load an entire class from a single spreadsheet upload.
+- **Demo tooling** — endpoints to simulate live risk drift and reset to seed state, built specifically for presentations.
+
+---
+
+## API Reference
+
+All endpoints are prefixed with `/api/v1`. Interactive documentation is available at `/docs` (Swagger UI) whenever the server is running.
+
+### Students
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/students` | List all students, filterable by risk band, sortable, paginated |
+| `GET` | `/students/{student_id}/state` | Full unified profile: grades, attendance, risk, and predictions |
+| `GET` | `/students/{student_id}/risk` | Standalone risk score and explanation |
+| `GET` | `/students/{student_id}/predictions` | Exam forecasts and projected GPA |
+| `GET` | `/students/{student_id}/plan` | Current auto-generated study plan |
+| `POST` | `/students/{student_id}/plan/generate` | Generate/regenerate a study plan |
+| `POST` | `/students/{student_id}/tasks/{task_id}/complete` | Mark a task complete — triggers activity recency update and automatic risk recalculation |
+
+### Retention (Spaced Repetition)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/students/{student_id}/reviews` | SM-2 review schedule, optionally filtered to items due now |
+| `POST` | `/students/{student_id}/reviews/{topic}/grade` | Record a review outcome and reschedule the next review |
+
+### Career Signals
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/students/{student_id}/internships` | Matched internship opportunities |
+| `GET` | `/students/{student_id}/coding` | Codeforces profile stats (offline-safe, never 500s) |
+
+### Interventions
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/interventions` | List pending and historical intervention alerts |
+| `POST` | `/interventions/{intervention_id}/review` | Mentor approval/dismissal of an intervention |
+
+### Conversational
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/chat` | Chat with an AI mentor, grounded in the student's real state |
+
+### Cohort Management
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/ingest` | Upload and ingest a cohort dataset (Excel) |
+
+### Demo Tooling
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/demo/drift-hero` | Simulate a live risk-drift scenario for presentations |
+| `POST` | `/demo/reset` | Reset the store to seed state |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.10+
+- `pip`
+
+### Installation
+
 ```bash
-GEMINI_API_KEY=... GEMINI_MODEL=gemini-flash-latest python -m pytest tests/test_llm_live.py
+git clone <repository-url>
+cd Student-AI-Mentor
+pip install -r requirements.txt
 ```
 
+### Running the server
+
+```bash
+uvicorn backend.main:app --reload --port 8000
+```
+
+The API will be available at `http://127.0.0.1:8000`, and interactive Swagger docs at `http://127.0.0.1:8000/docs`.
+
+---
+
+## Authentication
+
+All endpoints require an API key, passed via header:
+
+```
+X-API-Key: <your-key>
+```
+
+Some endpoints additionally check a role header for access control:
+
+```
+X-User-Role: mentor | student
+X-User-Id: <student-or-mentor-id>
+```
+
+In Swagger UI, click **Authorize** (top right) and enter your API key once — it will be attached to every subsequent request automatically.
+
+---
+
+## Testing
+
+```bash
+python -m pytest
+```
+
+The test suite covers risk calculation, interventions, role gating, and end-to-end behavior across the API.
+
+---
+
+## Project Status & Roadmap
+
+This project is under active development. Known in-progress items:
+
+- [ ] Move exam/GPA forecasting from linear extrapolation to a damped-growth model that reconciles projected GPA against current CGPA
+- [ ] Full field-parity audit between `StudentState` and the chat context builder (some fields are not yet surfaced to the conversational layer)
+- [ ] Mentor-facing dashboard UI
+- [ ] Expanded coding-activity and project-based risk signals
+
+---
+
+## Tech Stack
+
+- **Backend:** FastAPI (Python)
+- **API Docs:** OpenAPI / Swagger UI (auto-generated)
+- **Data ingestion:** Excel (via `openpyxl` / `pandas`)
+- **Spaced repetition:** SM-2 algorithm
+- **Testing:** pytest
