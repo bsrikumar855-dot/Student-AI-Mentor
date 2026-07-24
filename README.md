@@ -1,14 +1,14 @@
-# Drishya
+# Drishta
 
 **An explainable, signal-based early-warning system for student mentors.**
 
-Drishya continuously tracks academic and engagement signals for every student in a cohort, converts them into a transparent risk score, forecasts where each student is headed, and closes the loop by turning risk into action — automatically.
+Drishta continuously tracks academic and engagement signals for every student in a cohort, converts them into a transparent risk score, forecasts where each student is headed, and closes the loop by turning risk into action — automatically.
 
 ---
 
 ## Table of Contents
 
-- [Why Drishya](#why-drishya)
+- [Why Drishta](#why-drishya)
 - [How It Works](#how-it-works)
 - [Features](#features)
 - [API Reference](#api-reference)
@@ -20,7 +20,7 @@ Drishya continuously tracks academic and engagement signals for every student in
 
 ---
 
-## Why Drishya
+## Why Drishta
 
 Academic decline is gradual, but institutional response is not. A student's grades, attendance, and engagement erode over weeks — sometimes months — before a mentor, advisor, or system takes notice. By then, the intervention window has already narrowed from course correction to damage control.
 
