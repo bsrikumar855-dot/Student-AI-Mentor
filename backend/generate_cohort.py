@@ -6,16 +6,94 @@ import os
 import pandas as pd
 from datetime import datetime, timedelta
 
-def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: int = 42) -> None:
+def generate_synthetic_cohort(output_path: str, num_students: int = 100, seed: int = 42) -> None:
     """
-    Generates synthetic student data including 1 hero (Aisha) and writes to an Excel file.
+    Generates synthetic student data including hero (Aisha), STU001-STU100, and demo test students,
+    writing a complete cohort Excel file across all 4 sheets (students, scores, exams, topics).
     """
+    import random
+    random.seed(seed)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    # 1. Students sheet
+    first_names = ["Aisha", "Rohan", "Priya", "Arjun", "Fatima", "Vikram", "Ananya", "Kabir", "Neha", "Dev",
+                   "Siddharth", "Meera", "Aarav", "Ishani", "Rishi", "Tanvi", "Aditya", "Diya", "Karan", "Sanya"]
+    last_names = ["Sharma", "Mehta", "Nair", "Khan", "Patel", "Verma", "Gupta", "Joshi", "Chopra", "Reddy",
+                  "Singh", "Iyer", "Rao", "Das", "Deshmukh", "Bhat", "Kulkarni", "Sen", "Roy", "Malhotra"]
+    skill_pools = [
+        "python,git,sql", "python,django,fastapi", "java,spring,sql", "c++,dsa,git",
+        "javascript,react,node", "python,machine-learning,sql", "html,css,javascript",
+        "python,pandas,numpy", "c++,algorithms,system-design", "java,kotlin,android"
+    ]
+    subjects_pool = ["Python", "DSA", "DBMS", "Web Development"]
+
     students = []
-    
-    # Hero: Aisha (Baseline Medium risk ~34.6)
+    scores = []
+    exams = []
+    topics = []
+
+    # Helper to add a student with full data across all sheets
+    def add_student_record(sid, name, cgpa, attendance, active_days, commit_days, linkedin_days, streak, skills, cf_handle=None, risk_level="medium"):
+        rec = {
+            "student_id": sid,
+            "name": name,
+            "cgpa": round(cgpa, 2),
+            "attendance": round(attendance, 2),
+            "days_since_active": active_days,
+            "days_since_commit": commit_days,
+            "days_since_linkedin": linkedin_days,
+            "goals_met_streak": streak,
+            "skills": skills,
+        }
+        if cf_handle:
+            rec["codeforces_handle"] = cf_handle
+        students.append(rec)
+
+        # Scores
+        for subj in subjects_pool:
+            if risk_level == "high":
+                s1 = round(random.uniform(55, 70), 1)
+                s2 = round(s1 - random.uniform(8, 15), 1)
+                s3 = round(s2 - random.uniform(5, 12), 1)
+            elif risk_level == "medium":
+                s1 = round(random.uniform(70, 82), 1)
+                s2 = round(s1 + random.uniform(-5, 5), 1)
+                s3 = round(s2 + random.uniform(-4, 6), 1)
+            else:  # low risk
+                s1 = round(random.uniform(82, 92), 1)
+                s2 = round(random.uniform(85, 96), 1)
+                s3 = round(random.uniform(88, 99), 1)
+            
+            scores.append({"student_id": sid, "subject": subj, "test_no": 1, "score": s1})
+            scores.append({"student_id": sid, "subject": subj, "test_no": 2, "score": s2})
+            scores.append({"student_id": sid, "subject": subj, "test_no": 3, "score": max(0.0, s3)})
+
+        # Exams
+        days_ahead = random.randint(3, 25)
+        comp = 0.15 if risk_level == "high" else (0.50 if risk_level == "medium" else 0.85)
+        exams.append({
+            "student_id": sid,
+            "subject": random.choice(subjects_pool),
+            "date": (datetime.now() + timedelta(days=days_ahead)).isoformat(),
+            "days_to_exam": days_ahead,
+            "completion": comp
+        })
+
+        # Topics
+        topics.append({
+            "student_id": sid,
+            "topic": random.choice(["Sorting", "Trees", "Graphs", "Recursion", "Dynamic Programming", "SQL Join"]),
+            "learned_on": (datetime.now() - timedelta(days=random.randint(5, 20))).isoformat(),
+            "ef": round(random.uniform(2.1, 2.8), 2),
+            "reps": random.randint(1, 4),
+            "interval": random.randint(1, 7),
+            "next_review": (datetime.now() + timedelta(days=random.randint(-2, 5))).isoformat()
+        })
+
+    # 1. Hero Student Aisha (STU001 and STU_HERO)
+    # STU001: low risk demo hero
+    add_student_record("STU001", "Aisha Sharma", 8.9, 0.92, 1, 2, 3, 4, "python,git,sql", "aisha_cf", "low")
+
+    # STU_HERO: exact benchmark Medium risk Aisha for risk transition test
     students.append({
         "student_id": "STU_HERO",
         "name": "Aisha",
@@ -28,137 +106,12 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         "skills": "python,git,sql",
         "codeforces_handle": "aisha_cf",
     })
-    
-    # High-risk students: distinct names and slightly varied inputs so scores differ
-    HIGH_RISK = [
-        {
-            "student_id": "STU1001", "name": "Rohan Mehta",
-            "cgpa": 5.9, "attendance": 0.68,
-            "days_since_active": 9, "days_since_commit": 14,
-            "days_since_linkedin": 18, "goals_met_streak": 0,
-            "skills": "python"
-        },
-        {
-            "student_id": "STU1002", "name": "Priya Sharma",
-            "cgpa": 6.2, "attendance": 0.71,
-            "days_since_active": 8, "days_since_commit": 12,
-            "days_since_linkedin": 16, "goals_met_streak": 0,
-            "skills": "java"
-        },
-        {
-            "student_id": "STU1003", "name": "Arjun Nair",
-            "cgpa": 5.7, "attendance": 0.65,
-            "days_since_active": 10, "days_since_commit": 15,
-            "days_since_linkedin": 21, "goals_met_streak": 0,
-            "skills": "c++"
-        },
-        {
-            "student_id": "STU1004", "name": "Fatima Khan",
-            "cgpa": 6.4, "attendance": 0.74,
-            "days_since_active": 7, "days_since_commit": 11,
-            "days_since_linkedin": 14, "goals_met_streak": 0,
-            "skills": "python,sql"
-        },
-    ]
-    students.extend(HIGH_RISK)
-
-    # Generate remaining students (indices 5-20) with explicit bands
-    # STU1005-STU1009: Medium Risk (25-44)
-    # STU1010-STU1020: Low Risk (<25)
-    for i in range(5, num_students + 1):
-        sid = f"STU{1000+i}"
-        name = f"Student {i}"
-
-        if i <= 9:
-            # Medium Risk
-            cgpa = 7.2
-            attendance = 0.82
-            days_since_active = 4
-            days_since_commit = 5
-            days_since_linkedin = 8
-            goals_met_streak = 2
-            skills = "python,git"
-        else:
-            # Low Risk
-            cgpa = 8.8
-            attendance = 0.95
-            days_since_active = 0
-            days_since_commit = 0
-            days_since_linkedin = 0
-            goals_met_streak = 5
-            skills = "python,git,sql"
-
-        students.append({
-            "student_id": sid,
-            "name": name,
-            "cgpa": cgpa,
-            "attendance": attendance,
-            "days_since_active": days_since_active,
-            "days_since_commit": days_since_commit,
-            "days_since_linkedin": days_since_linkedin,
-            "goals_met_streak": goals_met_streak,
-            "skills": skills
-        })
-        
-    df_students = pd.DataFrame(students)
-    
-    # 2. Scores sheet
-    scores = []
-    # Hero scores
     scores.append({"student_id": "STU_HERO", "subject": "Python", "test_no": 1, "score": 80.0})
     scores.append({"student_id": "STU_HERO", "subject": "Python", "test_no": 2, "score": 88.0})
     scores.append({"student_id": "STU_HERO", "subject": "Python", "test_no": 3, "score": 91.0})
-    
     scores.append({"student_id": "STU_HERO", "subject": "DSA", "test_no": 1, "score": 78.0})
     scores.append({"student_id": "STU_HERO", "subject": "DSA", "test_no": 2, "score": 65.0})
     scores.append({"student_id": "STU_HERO", "subject": "DSA", "test_no": 3, "score": 42.0})
-    
-    # High-risk student scores: each with a distinct declining profile
-    HIGH_RISK_SCORES = [
-        # STU1001 Rohan Mehta: steep Python decline
-        ("STU1001", "Python", [62.0, 45.0, 28.0]),
-        ("STU1001", "DSA",    [68.0, 50.0, 33.0]),
-        # STU1002 Priya Sharma: moderate decline
-        ("STU1002", "Python", [65.0, 52.0, 38.0]),
-        ("STU1002", "DSA",    [70.0, 55.0, 40.0]),
-        # STU1003 Arjun Nair: very steep decline
-        ("STU1003", "Python", [58.0, 40.0, 22.0]),
-        ("STU1003", "DSA",    [64.0, 46.0, 30.0]),
-        # STU1004 Fatima Khan: moderate but consistent decline
-        ("STU1004", "Python", [67.0, 55.0, 42.0]),
-        ("STU1004", "DSA",    [72.0, 58.0, 44.0]),
-    ]
-    for sid, subject, test_scores in HIGH_RISK_SCORES:
-        for test_no, score in enumerate(test_scores, start=1):
-            scores.append({"student_id": sid, "subject": subject, "test_no": test_no, "score": score})
-
-    # Other students scores (Medium and Low)
-    for i in range(5, num_students + 1):
-        sid = f"STU{1000+i}"
-        if i <= 9:
-            # Medium Risk scores: some decline
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 75.0})
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 70.0})
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 3, "score": 55.0})
-
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 72.0})
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 75.0})
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 3, "score": 70.0})
-        else:
-            # Low Risk scores: high, steady
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 1, "score": 85.0})
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 2, "score": 88.0})
-            scores.append({"student_id": sid, "subject": "Python", "test_no": 3, "score": 90.0})
-
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 1, "score": 82.0})
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 2, "score": 85.0})
-            scores.append({"student_id": sid, "subject": "DSA", "test_no": 3, "score": 88.0})
-
-    df_scores = pd.DataFrame(scores)
-
-    # 3. Exams sheet
-    exams = []
-    # Hero exams
     exams.append({
         "student_id": "STU_HERO",
         "subject": "DSA",
@@ -166,47 +119,6 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         "days_to_exam": 12,
         "completion": 0.45
     })
-    
-    # High-risk student exams: varied completion rates
-    HIGH_RISK_EXAMS = [
-        ("STU1001", 4,  0.15),  # Rohan: 4 days, 15% done
-        ("STU1002", 6,  0.20),  # Priya: 6 days, 20% done
-        ("STU1003", 3,  0.10),  # Arjun: 3 days, 10% done
-        ("STU1004", 5,  0.25),  # Fatima: 5 days, 25% done
-    ]
-    for sid, days, completion in HIGH_RISK_EXAMS:
-        exams.append({
-            "student_id": sid,
-            "subject": "DSA",
-            "date": (datetime.now() + timedelta(days=days)).isoformat(),
-            "days_to_exam": days,
-            "completion": completion
-        })
-
-    # Other students exams (Medium and Low)
-    for i in range(5, num_students + 1):
-        sid = f"STU{1000+i}"
-        if i <= 9:
-            exams.append({
-                "student_id": sid,
-                "subject": "DSA",
-                "date": (datetime.now() + timedelta(days=10)).isoformat(),
-                "days_to_exam": 10,
-                "completion": 0.45
-            })
-        else:
-            exams.append({
-                "student_id": sid,
-                "subject": "DSA",
-                "date": (datetime.now() + timedelta(days=20)).isoformat(),
-                "days_to_exam": 20,
-                "completion": 0.85
-            })
-    df_exams = pd.DataFrame(exams)
-    
-    # 4. Topics sheet
-    topics = []
-    # Hero topics
     topics.append({
         "student_id": "STU_HERO",
         "topic": "Graphs",
@@ -216,32 +128,53 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
         "interval": 1,
         "next_review": (datetime.now() - timedelta(days=5)).isoformat()
     })
-    
-    # Other students topics (STU1001-1004 + medium/low)
-    HIGH_RISK_SIDS = ["STU1001", "STU1002", "STU1003", "STU1004"]
-    for j, sid in enumerate(HIGH_RISK_SIDS):
-        topics.append({
-            "student_id": sid,
-            "topic": "Sorting" if j % 2 == 0 else "Trees",
-            "learned_on": (datetime.now() - timedelta(days=5)).isoformat(),
-            "ef": 2.5,
-            "reps": 1,
-            "interval": 2,
-            "next_review": (datetime.now() + timedelta(days=2)).isoformat()
-        })
-    for i in range(5, num_students + 1):
-        sid = f"STU{1000+i}"
-        topics.append({
-            "student_id": sid,
-            "topic": "Sorting" if i % 2 == 0 else "Trees",
-            "learned_on": (datetime.now() - timedelta(days=5)).isoformat(),
-            "ef": 2.5,
-            "reps": 1,
-            "interval": 2,
-            "next_review": (datetime.now() + timedelta(days=2)).isoformat()
-        })
+
+    # 2. Add STU_0008 explicit alias so STU_0008 query directly succeeds
+    add_student_record("STU_0008", "Student 0008", 8.4, 0.88, 2, 3, 5, 3, "python,sql", "stu0008_cf", "low")
+
+    # 3. Generate remaining 99 students (STU002 to STU100)
+    for i in range(2, num_students + 1):
+        sid = f"STU{i:03d}"  # STU002, STU003, ..., STU100
+        fname = random.choice(first_names)
+        lname = random.choice(last_names)
+        name = f"{fname} {lname}"
+
+        # Assign risk profile distribution: ~20% High, ~40% Medium, ~40% Low
+        r_val = random.random()
+        if r_val < 0.20:
+            risk = "high"
+            cgpa = random.uniform(5.2, 6.5)
+            att = random.uniform(0.55, 0.74)
+            act = random.randint(6, 14)
+            cmt = random.randint(10, 21)
+            lnk = random.randint(12, 30)
+            strk = 0
+        elif r_val < 0.60:
+            risk = "medium"
+            cgpa = random.uniform(6.6, 7.9)
+            att = random.uniform(0.75, 0.87)
+            act = random.randint(2, 6)
+            cmt = random.randint(4, 10)
+            lnk = random.randint(5, 15)
+            strk = random.randint(1, 3)
+        else:
+            risk = "low"
+            cgpa = random.uniform(8.0, 9.8)
+            att = random.uniform(0.88, 0.98)
+            act = random.randint(0, 2)
+            cmt = random.randint(0, 3)
+            lnk = random.randint(0, 7)
+            strk = random.randint(4, 10)
+
+        skills = random.choice(skill_pools)
+        cf_h = f"{fname.lower()}_{i}_cf" if i % 3 == 0 else None
+        add_student_record(sid, name, cgpa, att, act, cmt, lnk, strk, skills, cf_h, risk)
+
+    df_students = pd.DataFrame(students)
+    df_scores = pd.DataFrame(scores)
+    df_exams = pd.DataFrame(exams)
     df_topics = pd.DataFrame(topics)
-    
+
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         df_students.to_excel(writer, sheet_name="students", index=False)
         df_scores.to_excel(writer, sheet_name="scores", index=False)
@@ -251,5 +184,6 @@ def generate_synthetic_cohort(output_path: str, num_students: int = 20, seed: in
 if __name__ == "__main__":
     base_dir = os.path.dirname(os.path.dirname(__file__))
     output = os.path.join(base_dir, "backend", "data", "cohort.xlsx")
-    generate_synthetic_cohort(output)
-    print(f"Generated cohort data at {output}")
+    generate_synthetic_cohort(output, num_students=100)
+    print(f"Generated complete synthetic cohort with 100 students at {output}")
+

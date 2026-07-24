@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query, Security, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query, Security, Depends, Header
 from fastapi.security import APIKeyHeader
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -6,6 +6,9 @@ import json
 import os
 import logging
 import io
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from backend.models import (
     StudentState, Plan,
@@ -55,7 +58,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Authentication Setup
+# Authentication & RBAC Setup
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
@@ -69,6 +72,63 @@ def verify_api_key(api_key: Optional[str] = Depends(api_key_header)):
             headers={"WWW-Authenticate": "ApiKey"},
         )
     return api_key
+
+# ROLE-BASED ACCESS CONTROL (RBAC) GATING MATRIX:
+# - POST /api/v1/interventions/{id}/review   : Mentor/Faculty/Admin Only (Enforced via require_role)
+# - POST /api/v1/ingest                      : Mentor/Faculty/Admin Only (Enforced via require_role)
+# - POST /api/v1/students/{id}/plan/generate  : Student (self) or Mentor/Faculty/Admin (Enforced via require_role + ownership)
+# - POST /api/v1/students/{id}/tasks/{id}/complete: Student (self) or Mentor/Faculty/Admin (Enforced via require_role + ownership)
+# - POST /api/v1/students/{id}/reviews/{topic}/grade: Student (self) or Mentor/Faculty/Admin (Enforced via require_role + ownership)
+# - POST /api/v1/chat                        : Student (self) or Mentor/Faculty/Admin (Enforced via require_role + ownership)
+# - POST /api/v1/demo/drift-hero             : Mentor/Faculty/Admin Only (Enforced via require_role)
+# - POST /api/v1/demo/reset                  : Mentor/Faculty/Admin Only (Enforced via require_role)
+
+def require_role(allowed_roles: List[str]):
+    def role_checker(x_user_role: Optional[str] = Header(None, alias="X-User-Role")):
+        if not x_user_role or not x_user_role.strip():
+            logger.warning("Role access denied: Missing X-User-Role header")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Missing X-User-Role header."
+            )
+        role = x_user_role.strip().lower()
+        allowed = [r.strip().lower() for r in allowed_roles]
+        if role not in allowed:
+            logger.warning(f"Role access denied: role '{role}' not in allowed roles {allowed}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: Role '{role}' is not authorized for this endpoint (requires one of {allowed_roles})."
+            )
+        return role
+    return role_checker
+
+def verify_student_ownership(
+    target_student_id: str,
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
+    """
+    Verifies student ownership for student-callable endpoints.
+    Mentors, faculty, and admins can access any student's data.
+    Students are restricted to modifying their own student_id matching X-User-Id header.
+    """
+    role = (x_user_role or "").strip().lower()
+    if role in ("mentor", "faculty", "admin"):
+        return
+    if role == "student":
+        caller_id = (x_user_id or "").strip()
+        if not caller_id:
+            logger.warning(f"Student ownership violation: Missing X-User-Id header for student target '{target_student_id}'")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Student requests must provide X-User-Id header for ownership verification."
+            )
+        if caller_id != target_student_id:
+            logger.warning(f"Student ownership violation: caller '{caller_id}' attempted to access '{target_student_id}'")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Students are only permitted to access their own data."
+            )
 
 def check_demo_allowed():
     if not os.environ.get("ALLOW_DEMO_ENDPOINTS", "true").lower() == "true":
@@ -84,11 +144,21 @@ store = InMemoryStore(persist_path=os.environ.get("POLARIS_PERSIST_PATH"))
 platform_links = PlatformLinkStore()
 
 
+def get_or_calculate_student_risk(student: StudentState) -> RiskResult:
+    """
+    Refactored shared helper function to compute deterministic risk score and explanation.
+    Guarantees strict parity across /state, /risk, chat context, and feedback loops.
+    """
+    derived_signals = store.get_derived(student.student_id)
+    risk_state = calculate_risk(student, derived_signals)
+    student.risk = risk_state
+    return risk_state
+
+
 def generate_plan_for_student(student: StudentState) -> Plan:
     derived_signals = store.get_derived(student.student_id)
 
-    risk_state = calculate_risk(student, derived_signals)
-    student.risk = risk_state
+    risk_state = get_or_calculate_student_risk(student)
     student.predictions = predict_trends(student)
 
     active_interventions = evaluate_interventions(
@@ -125,7 +195,7 @@ def generate_plan_for_student(student: StudentState) -> Plan:
 
     return plan
 
-@router.post("/ingest", status_code=status.HTTP_201_CREATED, dependencies=[Depends(ingest_limiter)])
+@router.post("/ingest", status_code=status.HTTP_201_CREATED, dependencies=[Depends(ingest_limiter), Depends(require_role(["mentor", "faculty", "admin"]))])
 async def ingest_cohort(file: UploadFile):
     # Enforce size limit (max 10MB)
     content_length = file.headers.get("content-length")
@@ -228,7 +298,30 @@ async def get_student_state(student_id: str):
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
+    get_or_calculate_student_risk(student)
     return student
+
+@router.get("/students/{student_id}/risk")
+async def get_student_risk(student_id: str):
+    """
+    Return standalone risk score and detailed explanation for a student.
+    Uses the exact same underlying get_or_calculate_student_risk logic as /state.
+    """
+    student = store.get_student(student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+    
+    risk = get_or_calculate_student_risk(student)
+    store.save_student(student)
+    return {
+        "student_id": student.student_id,
+        "score": risk.score,
+        "level": risk.level,
+        "reasons": risk.reasons,
+        "components": risk.components,
+        "computed_at": risk.computed_at,
+        "explanation": risk.explanation
+    }
 
 @router.get("/students/{student_id}/plan")
 async def get_student_plan(student_id: str):
@@ -241,8 +334,13 @@ async def get_student_plan(student_id: str):
         raise HTTPException(status_code=409, detail="Plan not found for student.")
     return plan
 
-@router.post("/students/{student_id}/plan/generate")
-async def generate_student_plan(student_id: str):
+@router.post("/students/{student_id}/plan/generate", dependencies=[Depends(require_role(["student", "mentor", "faculty", "admin"]))])
+async def generate_student_plan(
+    student_id: str,
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
+    verify_student_ownership(student_id, x_user_role, x_user_id)
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
@@ -318,8 +416,15 @@ async def get_student_reviews(student_id: str, due: Optional[str] = Query(None, 
         
     return all_due
 
-@router.post("/students/{student_id}/reviews/{topic}/grade")
-async def grade_topic_review(student_id: str, topic: str, payload: GradeRequest):
+@router.post("/students/{student_id}/reviews/{topic}/grade", dependencies=[Depends(require_role(["student", "mentor", "faculty", "admin"]))])
+async def grade_topic_review(
+    student_id: str,
+    topic: str,
+    payload: GradeRequest,
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
+    verify_student_ownership(student_id, x_user_role, x_user_id)
     student = store.get_student(student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
@@ -346,8 +451,19 @@ async def grade_topic_review(student_id: str, topic: str, payload: GradeRequest)
     
     return updated_topic
 
-@router.post("/students/{student_id}/tasks/{task_id}/complete")
-async def complete_student_task(student_id: str, task_id: str):
+@router.post("/students/{student_id}/tasks/{task_id}/complete", dependencies=[Depends(require_role(["student", "mentor", "faculty", "admin"]))])
+async def complete_student_task(
+    student_id: str,
+    task_id: str,
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
+    """
+    Marks a study task as complete/incomplete.
+    FEEDBACK LOOP: Completing a task updates activity recency (days_since_active = 0)
+    and triggers automatic risk score recalculation and trend re-prediction.
+    """
+    verify_student_ownership(student_id, x_user_role, x_user_id)
     student = store.get_student(student_id)
     plan = store.get_plan(student_id)
     if not student or not plan:
@@ -365,6 +481,11 @@ async def complete_student_task(student_id: str, task_id: str):
         
     if plan.daily_targets and all(t.done for t in plan.daily_targets):
         student.goals_met_streak += 1
+
+    # Plan -> task -> re-score feedback loop:
+    student.days_since_active = 0
+    updated_risk = get_or_calculate_student_risk(student)
+    student.predictions = predict_trends(student)
         
     store.save_student(student)
     store.save_plan(student_id, plan)
@@ -372,10 +493,12 @@ async def complete_student_task(student_id: str, task_id: str):
         "student_id": student_id,
         "task_id": task_id,
         "done": any(t.done for t in plan.daily_targets if t.id == task_id),
-        "goals_met_streak": student.goals_met_streak
+        "goals_met_streak": student.goals_met_streak,
+        "risk_score": updated_risk.score,
+        "risk_level": updated_risk.level
     }
 
-@router.post("/interventions/{intervention_id}/review")
+@router.post("/interventions/{intervention_id}/review", dependencies=[Depends(require_role(["mentor", "faculty", "admin"]))])
 async def review_intervention(intervention_id: str, payload: ReviewRequest):
     parts = intervention_id.split(":")
     if len(parts) < 2:
@@ -417,16 +540,25 @@ async def review_intervention(intervention_id: str, payload: ReviewRequest):
         "at": datetime.now(timezone.utc).isoformat()
     }
 
-@router.post("/chat", dependencies=[Depends(chat_limiter)])
-async def chat_endpoint(payload: ChatRequest):
+@router.post("/chat", dependencies=[Depends(chat_limiter), Depends(require_role(["student", "mentor", "faculty", "admin"]))])
+async def chat_endpoint(
+    payload: ChatRequest,
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
+    verify_student_ownership(payload.student_id, x_user_role, x_user_id)
     student = store.get_student(payload.student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found.")
         
-    reply, used_llm = chat_response(payload.message, payload.history)
+    plan = store.get_plan(payload.student_id)
+    get_or_calculate_student_risk(student)
+
+    # Context passed into chat: student state (name, risk level/score/reasons), nearest exam, active daily targets & interventions
+    reply, used_llm = chat_response(payload.message, payload.history, student=student, plan=plan)
     return {"reply": reply, "used_llm": used_llm}
 
-@router.post("/demo/drift-hero")
+@router.post("/demo/drift-hero", dependencies=[Depends(require_role(["mentor", "faculty", "admin"]))])
 async def demo_drift_hero():
     check_demo_allowed()
     student = store.get_student("STU_HERO")
@@ -446,11 +578,11 @@ async def demo_drift_hero():
     plan = generate_plan_for_student(student)
     store.save_student(student)
     store.save_plan("STU_HERO", plan)
-    if getattr(store, "persist_path", None):
+    if getattr(store, "persist_path", None) and store.persist_path.endswith(".json"):
         store.dump_json(store.persist_path)
     return {"success": True}
 
-@router.post("/demo/reset")
+@router.post("/demo/reset", dependencies=[Depends(require_role(["mentor", "faculty", "admin"]))])
 async def demo_reset():
     check_demo_allowed()
     # Reset store
@@ -474,7 +606,7 @@ async def demo_reset():
         plan = generate_plan_for_student(student)
         store.save_plan(student.student_id, plan)
         
-    if getattr(store, "persist_path", None):
+    if getattr(store, "persist_path", None) and store.persist_path.endswith(".json"):
         store.dump_json(store.persist_path)
     return {"success": True}
 

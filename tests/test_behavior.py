@@ -116,6 +116,51 @@ def test_ingest_excel_skips_malformed_row():
     assert "reason" in skipped[0] and skipped[0]["reason"]
 
 
+def test_ingest_excel_detailed_error_messages():
+    import io
+    import pandas as pd
+
+    students_df = pd.DataFrame([
+        {
+            "student_id": "STU101",
+            "name": "Alice",
+            "cgpa": 8.5,
+            "attendance": 0.9,
+            "days_since_active": 1,
+            "days_since_commit": 2,
+            "days_since_linkedin": 3,
+            "goals_met_streak": 5,
+            "skills": "python"
+        }
+    ])
+    exams_df = pd.DataFrame([
+        {
+            "student_id": "STU101",
+            "subject": "DSA",
+            "date": "2026-08-01",
+            "days_to_exam": "Exam 2",
+            "completion": 0.5
+        }
+    ])
+
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine='openpyxl') as writer:
+        students_df.to_excel(writer, sheet_name="students", index=False)
+        exams_df.to_excel(writer, sheet_name="exams", index=False)
+
+    out.seek(0)
+    students, skipped = ingest_excel(out)
+
+    assert len(skipped) == 1
+    reason = skipped[0]["reason"]
+    assert "exams" in reason
+    assert "Excel row 2" in reason
+    assert "days_to_exam" in reason
+    assert "Exam 2" in reason
+    assert "expected a number" in reason
+
+
+
 def test_calculate_risk_behavior():
     # Construct a student state
     from datetime import datetime
@@ -254,7 +299,9 @@ def test_match_internships_custom_policy_excludes_partial_match():
     res_strict = match_internships(["python", "django"], 7.5, db, policy=strict_policy)
     assert res_strict == []
 
-def test_language_phrase_fallback():
+def test_language_phrase_fallback(monkeypatch):
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     from backend.models import StudentState, Plan, Intervention
     student = StudentState(
         student_id="STU1",
@@ -455,7 +502,9 @@ def test_cohort_realism_and_transition():
     assert "revision_timetable" in actions
     assert "flag_at_risk" in actions
 
-def test_chat_response_fallback():
+def test_chat_response_fallback(monkeypatch):
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     reply, used_llm = chat_response("Hello Drishta", [], api_key=None)
     assert not used_llm
     assert "Drishta Mentor: I received your message: 'Hello Drishta'." in reply
@@ -782,7 +831,7 @@ def test_ingest_writes_one_plan_decision_trace():
     resp = client.post(
         "/api/v1/ingest",
         files={"file": ("cohort.xlsx", out, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
-        headers={"X-API-Key": "drishta_secret_key"}
+        headers={"X-API-Key": "drishta_secret_key", "X-User-Role": "mentor"}
     )
     assert resp.status_code == 201
 
@@ -831,4 +880,220 @@ def test_get_interventions_endpoint():
     # Assert it includes flag_at_risk for the high student
     has_flag_at_risk = any(item["student_id"] == "STU_HIGH_TEST" and item["action"] == "flag_at_risk" for item in data)
     assert has_flag_at_risk
+
+
+def test_get_student_risk_endpoint():
+    from fastapi.testclient import TestClient
+    from backend.main import app, store
+    from backend.models import StudentState
+
+    student = StudentState(
+        student_id="STU_RISK_ISO",
+        name="Risk Isolated Student",
+        cgpa=7.0,
+        attendance=0.85,
+        subjects=[],
+        exams=[],
+        days_since_active=5,
+        days_since_commit=5,
+        days_since_linkedin=5,
+        goals_met_streak=1,
+        topics=[],
+        skills=["python"]
+    )
+    store.save_student(student)
+
+    client = TestClient(app)
+    headers = {"X-API-Key": "drishta_secret_key"}
+
+    # Fetch via /risk
+    res_risk = client.get("/api/v1/students/STU_RISK_ISO/risk", headers=headers)
+    assert res_risk.status_code == 200
+    risk_data = res_risk.json()
+    assert risk_data["student_id"] == "STU_RISK_ISO"
+    assert "score" in risk_data
+    assert "level" in risk_data
+    assert "explanation" in risk_data
+    assert "components" in risk_data
+
+    # Fetch via /state
+    res_state = client.get("/api/v1/students/STU_RISK_ISO/state", headers=headers)
+    assert res_state.status_code == 200
+    state_data = res_state.json()
+
+    # Parity verification
+    assert risk_data["score"] == state_data["risk"]["score"]
+    assert risk_data["level"] == state_data["risk"]["level"]
+
+
+def test_role_gating_on_interventions():
+    from fastapi.testclient import TestClient
+    from backend.main import app, store, generate_plan_for_student
+    from backend.models import StudentState
+
+    student = StudentState(
+        student_id="STU_ROLE_TEST",
+        name="Role Test Student",
+        cgpa=6.0,
+        attendance=0.7,
+        subjects=[],
+        exams=[],
+        days_since_active=6,
+        days_since_commit=6,
+        days_since_linkedin=6,
+        goals_met_streak=0,
+        topics=[],
+        skills=[]
+    )
+    store.save_student(student)
+    plan = generate_plan_for_student(student)
+    store.save_plan("STU_ROLE_TEST", plan)
+
+    # Find a non-auto intervention or create one
+    inter_id = f"STU_ROLE_TEST:interv_001"
+    if plan.interventions:
+        plan.interventions[0].auto = False
+        inter_id = plan.interventions[0].id
+    else:
+        from backend.models import Intervention
+        plan.interventions.append(Intervention(id=inter_id, action="mentor_meeting", why="High risk", kind="guidance", auto=False))
+    store.save_plan("STU_ROLE_TEST", plan)
+
+    client = TestClient(app)
+
+    # 1. Reject student role
+    res_student = client.post(
+        f"/api/v1/interventions/{inter_id}/review",
+        json={"decision": "approve", "note": "All good"},
+        headers={"X-API-Key": "drishta_secret_key", "X-User-Role": "student"}
+    )
+    assert res_student.status_code == 403
+
+    # 2. Allow mentor role
+    res_mentor = client.post(
+        f"/api/v1/interventions/{inter_id}/review",
+        json={"decision": "approve", "note": "All good"},
+        headers={"X-API-Key": "drishta_secret_key", "X-User-Role": "mentor"}
+    )
+    assert res_mentor.status_code == 200
+    assert res_mentor.json()["status"] == "reviewed"
+
+
+def test_task_completion_feedback_loop():
+    from fastapi.testclient import TestClient
+    from backend.main import app, store, generate_plan_for_student
+    from backend.models import StudentState
+
+    student = StudentState(
+        student_id="STU_FEEDBACK_LOOP",
+        name="Feedback Loop Student",
+        cgpa=6.0,
+        attendance=0.7,
+        subjects=[],
+        exams=[],
+        days_since_active=10,
+        days_since_commit=10,
+        days_since_linkedin=10,
+        goals_met_streak=0,
+        topics=[],
+        skills=[]
+    )
+    store.save_student(student)
+    plan = generate_plan_for_student(student)
+    store.save_plan("STU_FEEDBACK_LOOP", plan)
+
+    assert student.days_since_active == 10
+    initial_risk_score = student.risk.score
+
+    client = TestClient(app)
+    headers = {
+        "X-API-Key": "drishta_secret_key",
+        "X-User-Role": "student",
+        "X-User-Id": "STU_FEEDBACK_LOOP"
+    }
+
+    task_id = plan.daily_targets[0].id if plan.daily_targets else "target_1"
+    res = client.post(f"/api/v1/students/STU_FEEDBACK_LOOP/tasks/{task_id}/complete", headers=headers)
+    assert res.status_code == 200
+
+    updated_student = store.get_student("STU_FEEDBACK_LOOP")
+    assert updated_student.days_since_active == 0
+    assert updated_student.risk.score < initial_risk_score
+
+
+def test_missing_role_header_rejection():
+    from fastapi.testclient import TestClient
+    from backend.main import app
+
+    client = TestClient(app)
+    # 1. Missing X-User-Role header should yield 403 Forbidden
+    res = client.post(
+        "/api/v1/interventions/STU_HERO:interv_001/review",
+        json={"decision": "approve", "note": "Testing missing role"},
+        headers={"X-API-Key": "drishta_secret_key"}
+    )
+    assert res.status_code == 403
+    assert "Missing X-User-Role" in res.json()["detail"]
+
+
+def test_student_ownership_verification():
+    from fastapi.testclient import TestClient
+    from backend.main import app, store, generate_plan_for_student
+    from backend.models import StudentState
+
+    student = StudentState(
+        student_id="STU_OWNER_A",
+        name="Student A",
+        cgpa=7.5,
+        attendance=0.9,
+        subjects=[],
+        exams=[],
+        days_since_active=2,
+        days_since_commit=2,
+        days_since_linkedin=2,
+        goals_met_streak=0,
+        topics=[],
+        skills=[]
+    )
+    store.save_student(student)
+    plan = generate_plan_for_student(student)
+    store.save_plan("STU_OWNER_A", plan)
+
+    client = TestClient(app)
+    task_id = plan.daily_targets[0].id if plan.daily_targets else "target_1"
+
+    # 1. Student B trying to complete Student A's task -> 403 Forbidden
+    res_unauthorized = client.post(
+        f"/api/v1/students/STU_OWNER_A/tasks/{task_id}/complete",
+        headers={
+            "X-API-Key": "drishta_secret_key",
+            "X-User-Role": "student",
+            "X-User-Id": "STU_STUDENT_B"
+        }
+    )
+    assert res_unauthorized.status_code == 403
+    assert "Students are only permitted to access their own data" in res_unauthorized.json()["detail"]
+
+    # 2. Student A modifying their own task -> 200 OK
+    res_authorized_student = client.post(
+        f"/api/v1/students/STU_OWNER_A/tasks/{task_id}/complete",
+        headers={
+            "X-API-Key": "drishta_secret_key",
+            "X-User-Role": "student",
+            "X-User-Id": "STU_OWNER_A"
+        }
+    )
+    assert res_authorized_student.status_code == 200
+
+    # 3. Mentor modifying Student A's task -> 200 OK (mentors can act across students)
+    res_mentor = client.post(
+        f"/api/v1/students/STU_OWNER_A/tasks/{task_id}/complete",
+        headers={
+            "X-API-Key": "drishta_secret_key",
+            "X-User-Role": "mentor"
+        }
+    )
+    assert res_mentor.status_code == 200
+
+
 

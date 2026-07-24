@@ -87,6 +87,39 @@ def calculate_risk(
     below_target = [s.name for s in student.subjects if s.latest < TARGET]
     declining = [s.name for s in student.subjects if len(s.trend) >= 2 and s.trend[0] > 0 and s.trend[-1] < s.trend[0]]
 
+    # Detect overall trend direction and average weekly growth rate across subjects
+    slopes = []
+    for s in student.subjects:
+        if len(s.trend) >= 2:
+            deltas = [s.trend[i] - s.trend[i - 1] for i in range(1, len(s.trend))]
+            slopes.append(sum(deltas) / len(deltas))
+
+    if not slopes:
+        trend_detail = "Stable grades (no significant trend)."
+    else:
+        avg_slope = sum(slopes) / len(slopes)
+        abs_slope = abs(avg_slope)
+        slope_str = f"{abs_slope:.1f}" if abs(abs_slope - round(abs_slope)) > 1e-6 else f"{int(round(abs_slope))}"
+
+        if avg_slope >= 0.5:
+            if abs_slope < 3.0:
+                qualifier = "Slight"
+            elif abs_slope < 8.0:
+                qualifier = "Moderate"
+            else:
+                qualifier = "Strong"
+            trend_detail = f"{qualifier} upward grade trend (average gain +{slope_str}/wk)."
+        elif avg_slope <= -0.5:
+            if abs_slope < 3.0:
+                qualifier = "Slight"
+            elif abs_slope < 8.0:
+                qualifier = "Moderate"
+            else:
+                qualifier = "Strong"
+            trend_detail = f"{qualifier} downward grade trend (average drop -{slope_str}/wk)."
+        else:
+            trend_detail = "Stable grades (no significant trend)."
+
     details = {
         "score_gap": (
             f"Academic scores below target in {', '.join(below_target)} (average gap {score_gap*100:.1f}%)."
@@ -100,11 +133,7 @@ def calculate_risk(
             else "Syllabus completion is low."
         ),
         "activity_recency": f"Student has been inactive for {student.days_since_active} days.",
-        "trend": (
-            f"Downward trend in {', '.join(declining)} (average drop {trend*100:.1f}%)."
-            if declining
-            else f"Slight downward grade trend (average drop {trend*100:.1f}%)."
-        ),
+        "trend": trend_detail,
         "coding_activity": (
             f"No coding activity for {coding_val} days."
             if coding_val >= 0 else "No known coding profile or activity."

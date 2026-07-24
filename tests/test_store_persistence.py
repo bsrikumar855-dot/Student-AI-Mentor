@@ -171,4 +171,40 @@ def test_signal_store_persistence(tmp_path):
     assert derived["coding_activity"]["value"] is True
     assert derived["coding_activity"]["source"] == "codeforces"
     
-    assert loaded._decision_traces == [trace]
+    assert loaded._decision_traces == [trace]
+
+
+def test_dump_json_refuses_to_overwrite_sqlite_db(tmp_path):
+    db_path = str(tmp_path / "test_store.db")
+    store = InMemoryStore(persist_path=db_path)
+    student = make_student()
+    store.save_student(student)
+
+    # Calling dump_json with the SQLite DB path must NOT overwrite the .db file with JSON
+    store.dump_json(db_path)
+
+    # Check header of db_path: must still be valid SQLite header (starts with b'SQLite format 3')
+    with open(db_path, "rb") as f:
+        header = f.read(16)
+    assert header.startswith(b"SQLite format 3")
+
+    # A separate .json file should have been written instead
+    assert os.path.exists(db_path + ".json")
+
+
+def test_store_auto_recovers_from_corrupted_db_file(tmp_path):
+    db_path = str(tmp_path / "corrupt_store.db")
+    # Simulate a corrupted DB file (overwritten with JSON text)
+    with open(db_path, "w") as f:
+        f.write('{"students": {"corrupt": "data"}}')
+
+    # Constructing InMemoryStore on this corrupted file should auto-recover fresh DB without raising DatabaseError
+    store = InMemoryStore(persist_path=db_path)
+    student = make_student()
+    store.save_student(student)
+
+    assert store.get_student("STU1") == student
+    with open(db_path, "rb") as f:
+        header = f.read(16)
+    assert header.startswith(b"SQLite format 3")
+

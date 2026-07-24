@@ -10,12 +10,6 @@ import pandas as pd
 from datetime import datetime
 from backend.models import StudentState, Subject, Exam, TopicMemory
 
-def _required(row, col: str):
-    """Returns row[col], raising ValueError if the value is missing or NaN."""
-    val = row[col]
-    if pd.isna(val):
-        raise ValueError(f"missing required value for '{col}'")
-    return val
 
 def parse_datetime(val) -> datetime:
     if pd.isna(val):
@@ -25,6 +19,69 @@ def parse_datetime(val) -> datetime:
     if hasattr(val, "to_pydatetime"):
         return val.to_pydatetime()
     return val
+
+
+def _parse_field(row, col: str, field_type: str, sheet_name: str, excel_row: int, student_id: str = None, example: str = None):
+    """
+    Parses a field from an Excel row, validating existence and performing type conversion.
+    Raises ValueError with human-friendly, Excel-indexed details if missing or malformed.
+    
+    field_type options: 'number', 'integer', 'string', 'date'
+    """
+    sid_part = f" for {student_id}" if student_id else ""
+    
+    if col not in row or pd.isna(row[col]) or (isinstance(row[col], str) and not row[col].strip()):
+        type_desc = "a number" if field_type in ("number", "integer") else ("a valid date" if field_type == "date" else "a text string")
+        ex_desc = f" (e.g. {example})" if example is not None else ""
+        raise ValueError(
+            f"malformed {sheet_name} row{sid_part} (Excel row {excel_row}): column '{col}' is empty, expected {type_desc}{ex_desc}"
+        )
+
+    val = row[col]
+
+    if field_type == "number":
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            val_str = str(val).strip()
+            ex_desc = f" (e.g. {example})" if example is not None else ""
+            raise ValueError(
+                f"malformed {sheet_name} row{sid_part} (Excel row {excel_row}): column '{col}' contains '{val_str}', expected a number{ex_desc}"
+            )
+
+    elif field_type == "integer":
+        try:
+            f_val = float(val)
+            res = int(f_val)
+            return res
+        except (ValueError, TypeError):
+            val_str = str(val).strip()
+            ex_desc = f" (e.g. {example})" if example is not None else ""
+            raise ValueError(
+                f"malformed {sheet_name} row{sid_part} (Excel row {excel_row}): column '{col}' contains '{val_str}', expected a number{ex_desc}"
+            )
+
+    elif field_type == "date":
+        try:
+            return parse_datetime(val)
+        except Exception:
+            val_str = str(val).strip()
+            ex_desc = f" (e.g. {example})" if example is not None else ""
+            raise ValueError(
+                f"malformed {sheet_name} row{sid_part} (Excel row {excel_row}): column '{col}' contains '{val_str}', expected a valid date{ex_desc}"
+            )
+
+    elif field_type == "string":
+        res = str(val).strip()
+        if not res:
+            ex_desc = f" (e.g. {example})" if example is not None else ""
+            raise ValueError(
+                f"malformed {sheet_name} row{sid_part} (Excel row {excel_row}): column '{col}' is empty, expected a text string{ex_desc}"
+            )
+        return res
+
+    return val
+
 
 def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]]:
     """
@@ -52,14 +109,27 @@ def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]
         })
         return student_states, skipped
 
-    for _, row in df_students.iterrows():
-        try:
-            sid = str(row["student_id"])
-        except KeyError:
-            skipped.append({"student_id": None, "reason": "students row missing student_id"})
+    for idx, row in df_students.iterrows():
+        excel_row = int(idx) + 2
+
+        if "student_id" not in row or pd.isna(row["student_id"]) or not str(row["student_id"]).strip():
+            skipped.append({
+                "student_id": None,
+                "reason": f"malformed students row (Excel row {excel_row}): column 'student_id' is empty, expected a student ID"
+            })
             continue
 
+        sid = str(row["student_id"]).strip()
+
         try:
+            name = _parse_field(row, "name", "string", "students", excel_row, sid, example="Aisha Khan")
+            cgpa = _parse_field(row, "cgpa", "number", "students", excel_row, sid, example="8.5")
+            attendance = _parse_field(row, "attendance", "number", "students", excel_row, sid, example="0.90")
+            days_since_active = _parse_field(row, "days_since_active", "integer", "students", excel_row, sid, example="1")
+            days_since_commit = _parse_field(row, "days_since_commit", "integer", "students", excel_row, sid, example="0")
+            days_since_linkedin = _parse_field(row, "days_since_linkedin", "integer", "students", excel_row, sid, example="3")
+            goals_met_streak = _parse_field(row, "goals_met_streak", "integer", "students", excel_row, sid, example="5")
+
             skills_raw = row.get("skills", "")
             if pd.isna(skills_raw):
                 skills = []
@@ -75,15 +145,8 @@ def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]
             else:
                 coding_handles = {}
 
-            name = str(_required(row, "name"))
-            cgpa = float(_required(row, "cgpa"))
-            attendance = float(_required(row, "attendance"))
-            days_since_active = int(_required(row, "days_since_active"))
-            days_since_commit = int(_required(row, "days_since_commit"))
-            days_since_linkedin = int(_required(row, "days_since_linkedin"))
-            goals_met_streak = int(_required(row, "goals_met_streak"))
-        except (KeyError, ValueError, TypeError) as e:
-            skipped.append({"student_id": sid, "reason": f"malformed students row: {e}"})
+        except ValueError as e:
+            skipped.append({"student_id": sid, "reason": str(e)})
             continue
 
         student_scores = pd.DataFrame()
@@ -92,18 +155,26 @@ def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]
 
         subjects = []
         if not student_scores.empty:
+            score_groups = []
             try:
                 score_groups = list(student_scores.groupby("subject"))
-            except (KeyError, ValueError, TypeError) as e:
-                skipped.append({"student_id": sid, "reason": f"malformed scores sheet: {e}"})
-                score_groups = []
+            except Exception as e:
+                skipped.append({"student_id": sid, "reason": f"malformed scores sheet for {sid}: {e}"})
 
             for subj_name, group in score_groups:
                 try:
-                    sorted_group = group.sort_values(by="test_no")
-                    trend = [float(val) for val in sorted_group["score"].tolist()]
-                    latest = trend[-1] if trend else 0.0
+                    if "test_no" in group.columns:
+                        sorted_group = group.sort_values(by="test_no")
+                    else:
+                        sorted_group = group
 
+                    trend = []
+                    for s_idx, s_row in sorted_group.iterrows():
+                        s_excel_row = int(s_idx) + 2
+                        score_val = _parse_field(s_row, "score", "number", "scores", s_excel_row, sid, example="85.0")
+                        trend.append(score_val)
+
+                    latest = trend[-1] if trend else 0.0
                     flag = None
                     if len(trend) >= 2 and trend[-1] < trend[-2]:
                         flag = "Warning: Downward Trend"
@@ -114,10 +185,10 @@ def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]
                         trend=trend,
                         flag=flag
                     ))
-                except (KeyError, ValueError, TypeError) as e:
+                except ValueError as e:
                     skipped.append({
                         "student_id": sid,
-                        "reason": f"malformed scores row for subject '{subj_name}': {e}"
+                        "reason": str(e)
                     })
                     continue
 
@@ -125,18 +196,23 @@ def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]
         nearest_exam = None
         if not df_exams.empty and "student_id" in df_exams.columns:
             df_stud_exams = df_exams[df_exams["student_id"].astype(str) == sid]
-            for _, ex_row in df_stud_exams.iterrows():
+            for ex_idx, ex_row in df_stud_exams.iterrows():
+                ex_excel_row = int(ex_idx) + 2
                 try:
-                    ex_date = parse_datetime(ex_row["date"])
+                    subject = _parse_field(ex_row, "subject", "string", "exams", ex_excel_row, sid, example="DSA")
+                    ex_date = _parse_field(ex_row, "date", "date", "exams", ex_excel_row, sid, example="2026-08-01")
+                    days_to_exam = _parse_field(ex_row, "days_to_exam", "integer", "exams", ex_excel_row, sid, example="18")
+                    completion = _parse_field(ex_row, "completion", "number", "exams", ex_excel_row, sid, example="0.45")
+
                     exam_obj = Exam(
-                        subject=str(ex_row["subject"]),
+                        subject=subject,
                         date=ex_date,
-                        days_to_exam=int(ex_row["days_to_exam"]),
-                        completion=float(ex_row["completion"])
+                        days_to_exam=days_to_exam,
+                        completion=completion
                     )
                     student_exams.append(exam_obj)
-                except (KeyError, ValueError, TypeError) as e:
-                    skipped.append({"student_id": sid, "reason": f"malformed exams row: {e}"})
+                except ValueError as e:
+                    skipped.append({"student_id": sid, "reason": str(e)})
                     continue
 
             if student_exams:
@@ -149,20 +225,26 @@ def ingest_excel(file_content: BinaryIO) -> Tuple[List[StudentState], List[dict]
         topics = []
         if not df_topics.empty and "student_id" in df_topics.columns:
             df_stud_topics = df_topics[df_topics["student_id"].astype(str) == sid]
-            for _, t_row in df_stud_topics.iterrows():
+            for t_idx, t_row in df_stud_topics.iterrows():
+                t_excel_row = int(t_idx) + 2
                 try:
-                    learned_on = parse_datetime(t_row["learned_on"])
-                    next_review = parse_datetime(t_row["next_review"])
+                    topic_name = _parse_field(t_row, "topic", "string", "topics", t_excel_row, sid, example="Sorting")
+                    learned_on = _parse_field(t_row, "learned_on", "date", "topics", t_excel_row, sid, example="2026-07-01")
+                    ef = _parse_field(t_row, "ef", "number", "topics", t_excel_row, sid, example="2.5")
+                    reps = _parse_field(t_row, "reps", "integer", "topics", t_excel_row, sid, example="0")
+                    interval = _parse_field(t_row, "interval", "integer", "topics", t_excel_row, sid, example="1")
+                    next_review = _parse_field(t_row, "next_review", "date", "topics", t_excel_row, sid, example="2026-07-15")
+
                     topics.append(TopicMemory(
-                        topic=str(t_row["topic"]),
+                        topic=topic_name,
                         learned_on=learned_on,
-                        ef=float(t_row["ef"]),
-                        reps=int(t_row["reps"]),
-                        interval=int(t_row["interval"]),
+                        ef=ef,
+                        reps=reps,
+                        interval=interval,
                         next_review=next_review
                     ))
-                except (KeyError, ValueError, TypeError) as e:
-                    skipped.append({"student_id": sid, "reason": f"malformed topics row: {e}"})
+                except ValueError as e:
+                    skipped.append({"student_id": sid, "reason": str(e)})
                     continue
 
         try:
