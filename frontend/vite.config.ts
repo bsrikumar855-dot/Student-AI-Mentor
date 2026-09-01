@@ -12,6 +12,7 @@ export default defineConfig({
       '/interventions': 'http://localhost:8000/api/v1',
       '/ingest': 'http://localhost:8000/api/v1',
       '/demo': 'http://localhost:8000/api/v1',
+      '/auth': 'http://localhost:8000/api/v1',
     }
   },
   test: {

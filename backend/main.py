@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query, Security, Depends, Header
+from fastapi import FastAPI, HTTPException, UploadFile, status, APIRouter, Query, Security, Depends, Header, Body
 from fastapi.security import APIKeyHeader
 from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import json
 import os
@@ -13,7 +14,8 @@ load_dotenv()
 from backend.models import (
     StudentState, Plan,
     RiskResult, PredictionResult, InternshipMatch, TopicMemory, ChatRequest,
-    GradeRequest, ReviewRequest, PlanDecisionTrace, PlanExplanation
+    GradeRequest, ReviewRequest, PlanDecisionTrace, PlanExplanation,
+    CompleteTaskRequest, LoginRequest, LoginResponse
 )
 from backend.store import InMemoryStore
 from backend.platform_links import PlatformLinkStore, synthesize_consent_from_handles, resolve_active_handles
@@ -27,7 +29,8 @@ from backend.language import phrase_intervention_message, chat_response
 from backend.retain import due_topics, apply_sm2
 from backend.internships import match_internships
 from backend.coding import get_codeforces
-from backend.rate_limit import chat_limiter, ingest_limiter, api_limiter
+from backend.rate_limit import chat_limiter, ingest_limiter, api_limiter, auth_limiter
+from backend import auth as auth_module
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -38,10 +41,57 @@ logging.basicConfig(
 )
 logger = logging.getLogger("drishta")
 
+# APP_ENV gates production-only hardening below (insecure-default refusal,
+# demo endpoints off by default, etc). Defaults to "development" so local/dev
+# runs keep working with zero extra config.
+APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
+IS_PRODUCTION = APP_ENV == "production"
+DEFAULT_API_KEY = "drishta_secret_key"
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: auto-seed the demo cohort into `store` if it's empty. `store`,
+    # `generate_plan_for_student`, and `ingest_excel` are module globals that
+    # exist by the time the server actually starts (this closure resolves
+    # them at call time), even though they're defined later in this file.
+    if not store.list_students():
+        cohort_path = os.path.join(os.path.dirname(__file__), "data", "cohort.xlsx")
+        if not os.path.exists(cohort_path):
+            cohort_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend", "data", "cohort.xlsx")
+        if os.path.exists(cohort_path):
+            try:
+                with open(cohort_path, "rb") as f:
+                    students, _ = ingest_excel(f)
+                for student in students:
+                    store.save_student(student)
+
+                from backend.collector import run_collection
+                run_collection(store)
+
+                for student in students:
+                    plan = generate_plan_for_student(student)
+                    store.save_plan(student.student_id, plan)
+
+                if getattr(store, "persist_path", None):
+                    store.dump_json(store.persist_path)
+            except Exception as e:
+                logger.warning(f"Failed to auto-ingest cohort: {e}")
+    yield
+    # No shutdown work needed today (SQLite connections are per-process and
+    # closed on interpreter exit); placeholder kept explicit for the next
+    # thing that needs a clean teardown (e.g. flushing a queue).
+
+
 app = FastAPI(
     title="Drishta API",
     description="Proactive AI student mentor backend services",
-    version="1.0.0"
+    version="1.0.0",
+    # Hide interactive API docs in production -- they're a convenience for
+    # development, not something an internet-facing deployment should expose.
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
+    lifespan=lifespan,
 )
 
 # CORS Setup
@@ -58,12 +108,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health check: intentionally outside `router` (no X-API-Key requirement) so
+# a load balancer / Kubernetes readiness probe can hit it without a secret.
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "env": APP_ENV}
+
 # Authentication & RBAC Setup
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 def verify_api_key(api_key: Optional[str] = Depends(api_key_header)):
-    expected_key = os.environ.get("DRISHTA_API_KEY", "drishta_secret_key")
+    expected_key = os.environ.get("DRISHTA_API_KEY", DEFAULT_API_KEY)
     if not api_key or api_key != expected_key:
         logger.warning("Authentication failed or key missing")
         raise HTTPException(
@@ -131,7 +187,11 @@ def verify_student_ownership(
             )
 
 def check_demo_allowed():
-    if not os.environ.get("ALLOW_DEMO_ENDPOINTS", "true").lower() == "true":
+    # Demo endpoints default to OFF in production and ON everywhere else, so a
+    # prod deployment doesn't accidentally ship the seed-data reset/drift
+    # endpoints unless an operator explicitly opts back in.
+    default_allowed = "false" if IS_PRODUCTION else "true"
+    if not os.environ.get("ALLOW_DEMO_ENDPOINTS", default_allowed).lower() == "true":
         logger.warning("Access to demo endpoint denied (disabled in env)")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -194,6 +254,33 @@ def generate_plan_for_student(student: StudentState) -> Plan:
     ))
 
     return plan
+
+@router.post("/auth/login", response_model=LoginResponse, dependencies=[Depends(auth_limiter)])
+async def login(payload: LoginRequest):
+    """
+    Validates email/password against the configured user list (see backend/auth.py)
+    and returns a signed token plus the role/student_id the frontend must echo back
+    as X-User-Role/X-User-Id on subsequent requests. Deliberately vague on failure
+    (401 either way) to avoid leaking which emails are registered.
+    """
+    identity = auth_module.authenticate(payload.email, payload.password)
+    if not identity:
+        logger.warning(f"Login failed for email={payload.email!r}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
+
+    token = auth_module.create_token({
+        "email": identity["email"],
+        "role": identity["role"],
+        "student_id": identity["student_id"],
+    })
+
+    return LoginResponse(
+        token=token,
+        role=identity["role"],
+        student_id=identity["student_id"],
+        name=identity["name"],
+        email=identity["email"],
+    )
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED, dependencies=[Depends(ingest_limiter), Depends(require_role(["mentor", "faculty", "admin"]))])
 async def ingest_cohort(file: UploadFile):
@@ -455,11 +542,15 @@ async def grade_topic_review(
 async def complete_student_task(
     student_id: str,
     task_id: str,
+    payload: Optional[CompleteTaskRequest] = Body(default=None),
     x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
     x_user_id: Optional[str] = Header(None, alias="X-User-Id")
 ):
     """
     Marks a study task as complete/incomplete.
+    If the body specifies `completed`, the task is set to that exact state
+    (idempotent -- safe to retry); otherwise its `done` flag is toggled, same
+    as before, so no body is still a valid call.
     FEEDBACK LOOP: Completing a task updates activity recency (days_since_active = 0)
     and triggers automatic risk score recalculation and trend re-prediction.
     """
@@ -468,14 +559,14 @@ async def complete_student_task(
     plan = store.get_plan(student_id)
     if not student or not plan:
         raise HTTPException(status_code=404, detail="Student or Plan not found.")
-        
+
     task_found = False
     for target in plan.daily_targets:
         if target.id == task_id:
-            target.done = not target.done
+            target.done = (not target.done) if (payload is None or payload.completed is None) else payload.completed
             task_found = True
             break
-            
+
     if not task_found:
         raise HTTPException(status_code=404, detail="Task not found.")
         
@@ -645,29 +736,37 @@ async def list_interventions():
             })
     return result
 
-@app.on_event("startup")
-async def startup_event():
-    if not store.list_students():
-        cohort_path = os.path.join(os.path.dirname(__file__), "data", "cohort.xlsx")
-        if not os.path.exists(cohort_path):
-            cohort_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend", "data", "cohort.xlsx")
-        if os.path.exists(cohort_path):
-            try:
-                with open(cohort_path, "rb") as f:
-                    students, _ = ingest_excel(f)
-                for student in students:
-                    store.save_student(student)
-                
-                from backend.collector import run_collection
-                run_collection(store)
-                
-                for student in students:
-                    plan = generate_plan_for_student(student)
-                    store.save_plan(student.student_id, plan)
-                
-                if getattr(store, "persist_path", None):
-                    store.dump_json(store.persist_path)
-            except Exception as e:
-                logger.warning(f"Failed to auto-ingest cohort: {e}")
+def _run_production_safety_checks() -> None:
+    """
+    Fail fast rather than silently run insecurely: a production deployment
+    that still has the shipped default API key, an unset token secret, or a
+    localhost-only CORS allowlist is misconfigured, not merely non-optimal.
+    Runs once at import time so a bad prod config crashes on boot (visible in
+    deploy logs) instead of quietly accepting requests it shouldn't.
+    """
+    if not IS_PRODUCTION:
+        return
+
+    problems = []
+    if os.environ.get("DRISHTA_API_KEY", DEFAULT_API_KEY) == DEFAULT_API_KEY:
+        problems.append("DRISHTA_API_KEY is unset or still the shipped default -- set a strong, unique value.")
+    if not os.environ.get("DRISHTA_TOKEN_SECRET") and not os.environ.get("DRISHTA_API_KEY"):
+        problems.append("Neither DRISHTA_TOKEN_SECRET nor DRISHTA_API_KEY is set -- auth tokens would be signed with the built-in default secret.")
+    if not cors_origins_env:
+        problems.append("CORS_ALLOWED_ORIGINS is unset -- falling back to localhost-only origins, which is almost certainly wrong for a deployed frontend.")
+    if os.environ.get("DRISHTA_ALLOW_DEMO_USERS", "true").lower() == "true" and not os.environ.get("DRISHTA_AUTH_USERS"):
+        logger.warning(
+            "PRODUCTION WARNING: DRISHTA_ALLOW_DEMO_USERS is on and DRISHTA_AUTH_USERS is unset -- "
+            "the built-in demo accounts (alex.mercer@university.edu / password123, etc.) can log in. "
+            "Set DRISHTA_AUTH_USERS and/or DRISHTA_ALLOW_DEMO_USERS=false before going live."
+        )
+
+    if problems:
+        message = "Refusing to start in production with insecure configuration:\n" + "\n".join(f"  - {p}" for p in problems)
+        logger.critical(message)
+        raise RuntimeError(message)
+
+
+_run_production_safety_checks()
 
 app.include_router(router)

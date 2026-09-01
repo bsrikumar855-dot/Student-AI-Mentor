@@ -9,6 +9,8 @@ interface RequestOptions extends RequestInit {
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { schema, ...init } = options;
   const token = localStorage.getItem('drishta_auth_token');
+  const role = localStorage.getItem('drishta_role');
+  const studentId = localStorage.getItem('drishta_student_id');
 
   const headers = new Headers(init.headers);
   if (!headers.has('X-API-Key')) {
@@ -16,6 +18,16 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
+  }
+  // Backend RBAC (require_role / verify_student_ownership) reads these on
+  // every role-gated endpoint (chat, task completion, plan generation,
+  // review grading, intervention review, ingest, demo). Without them every
+  // one of those POST requests gets a 403, even with a valid API key.
+  if (role && !headers.has('X-User-Role')) {
+    headers.set('X-User-Role', role);
+  }
+  if (studentId && !headers.has('X-User-Id')) {
+    headers.set('X-User-Id', studentId);
   }
   if (!(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -33,7 +45,12 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     let message = `API request failed: ${response.status} ${response.statusText}`;
     try {
       const errJson = JSON.parse(text);
-      if (errJson.message) message = errJson.message;
+      // FastAPI's HTTPException serializes as {"detail": "..."}, not
+      // {"message": "..."} -- prefer detail so real backend error text
+      // (invalid credentials, ownership violations, validation errors) reaches
+      // the user instead of the generic status-code fallback.
+      if (typeof errJson.detail === 'string') message = errJson.detail;
+      else if (errJson.message) message = errJson.message;
     } catch {
       if (text) message = text;
     }

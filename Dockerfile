@@ -27,8 +27,17 @@ COPY data/ ./data/
 # Copy built frontend assets
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
+# Run as a non-root user rather than the container default root.
+RUN useradd --create-home --shell /usr/sbin/nologin drishta \
+    && chown -R drishta:drishta /app
+USER drishta
+
 # Expose port and run
 EXPOSE 8000
 ENV HOST=0.0.0.0
 ENV PORT=8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"
+
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

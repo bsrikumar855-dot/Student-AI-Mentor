@@ -9,3 +9,4 @@ requests>=2.28.0
 httpx>=0.24.0
 python-multipart>=0.0.7
 openai>=1.0.0
+python-dotenv>=1.0.0

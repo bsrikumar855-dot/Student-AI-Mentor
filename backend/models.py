@@ -197,3 +197,19 @@ class GradeRequest(BaseModel):
 class ReviewRequest(BaseModel):
     decision: str = Field(..., pattern="^(approve|override)$")
     note: Optional[str] = None
+
+class CompleteTaskRequest(BaseModel):
+    """Optional body for POST /tasks/{id}/complete. When `completed` is omitted
+    the endpoint falls back to toggling the task's current `done` state."""
+    completed: Optional[bool] = None
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., max_length=254)
+    password: str = Field(..., min_length=1, max_length=200)
+
+class LoginResponse(BaseModel):
+    token: str
+    role: Literal["student", "mentor", "faculty", "admin"]
+    student_id: Optional[str] = None
+    name: str
+    email: str
