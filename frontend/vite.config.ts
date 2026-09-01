@@ -1,25 +1,21 @@
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [tailwindcss(), react()],
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   server: {
+    port: 3000,
     proxy: {
-      '/students': 'http://localhost:8000/api/v1',
-      '/chat': 'http://localhost:8000/api/v1',
-      '/interventions': 'http://localhost:8000/api/v1',
-      '/ingest': 'http://localhost:8000/api/v1',
-      '/demo': 'http://localhost:8000/api/v1',
-      '/auth': 'http://localhost:8000/api/v1',
-    }
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
   },
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: './src/tests/setup.ts',
-    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
-  },
-})
-
+});

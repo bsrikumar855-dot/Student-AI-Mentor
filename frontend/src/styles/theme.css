@@ -1,0 +1,36 @@
+:root {
+  /* Brand palette */
+  --drishta-dark: #07020D;
+  --drishta-cream: #EEF5DB;
+  --drishta-blue: #B8D8D8;
+  --drishta-steel: #7A9E9F;
+  --drishta-stone: #5E574D;
+
+  /* Semantic palette (60/30/10 rule) */
+  --background: #EEF5DB;
+  --foreground: #07020D;
+  --surface: #FFFFFF;
+  --card: rgba(255, 255, 255, 0.7);
+  --border: #7A9E9F;
+  --primary: #07020D;
+  --secondary: #5E574D;
+  --accent: #B8D8D8;
+  --muted: #5E574D;
+
+  /* Risk levels */
+  --risk-low: #10B981;
+  --risk-medium: #F59E0B;
+  --risk-high: #EF4444;
+}
+
+.dark {
+  --background: #07020D;
+  --foreground: #EEF5DB;
+  --surface: #0F091A;
+  --card: rgba(15, 9, 26, 0.7);
+  --border: #5E574D;
+  --primary: #EEF5DB;
+  --secondary: #7A9E9F;
+  --accent: #B8D8D8;
+  --muted: #7A9E9F;
+}

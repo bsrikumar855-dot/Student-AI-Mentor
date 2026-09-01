@@ -1,218 +1,84 @@
+import { CONFIG } from '../app/config';
+import { getAuthHeaders } from './headers';
+import { ApiError } from './errors';
 import { z } from 'zod';
 
-const BASE_URL = ''; // Relative path so Vite proxies API calls to the backend.
+export class ApiClient {
+  private baseUrl: string;
 
-interface RequestOptions extends RequestInit {
-  schema?: z.ZodType<any, any, any>;
-}
-
-export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { schema, ...init } = options;
-  const token = localStorage.getItem('drishta_auth_token');
-  const role = localStorage.getItem('drishta_role');
-  const studentId = localStorage.getItem('drishta_student_id');
-
-  const headers = new Headers(init.headers);
-  if (!headers.has('X-API-Key')) {
-    headers.set('X-API-Key', import.meta.env.VITE_API_KEY || 'drishta_secret_key');
-  }
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-  // Backend RBAC (require_role / verify_student_ownership) reads these on
-  // every role-gated endpoint (chat, task completion, plan generation,
-  // review grading, intervention review, ingest, demo). Without them every
-  // one of those POST requests gets a 403, even with a valid API key.
-  if (role && !headers.has('X-User-Role')) {
-    headers.set('X-User-Role', role);
-  }
-  if (studentId && !headers.has('X-User-Id')) {
-    headers.set('X-User-Id', studentId);
-  }
-  if (!(init.body instanceof FormData) && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
+  constructor(baseUrl: string = CONFIG.API_BASE_URL) {
+    this.baseUrl = baseUrl;
   }
 
-  const requestPath = path;
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    schema?: z.ZodType<any>
+  ): Promise<T> {
+    const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const headers = {
+      ...getAuthHeaders(),
+      ...(options.headers as Record<string, string>),
+    };
 
-  const response = await fetch(`${BASE_URL}${requestPath}`, {
-    ...init,
-    headers,
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    let message = `API request failed: ${response.status} ${response.statusText}`;
-    try {
-      const errJson = JSON.parse(text);
-      // FastAPI's HTTPException serializes as {"detail": "..."}, not
-      // {"message": "..."} -- prefer detail so real backend error text
-      // (invalid credentials, ownership violations, validation errors) reaches
-      // the user instead of the generic status-code fallback.
-      if (typeof errJson.detail === 'string') message = errJson.detail;
-      else if (errJson.message) message = errJson.message;
-    } catch {
-      if (text) message = text;
+    if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
     }
-    throw new Error(message);
-  }
 
-  let data = await response.json();
-
-  // Map backend shapes to frontend-v2 schemas panel by panel.
-  if (requestPath.endsWith('/state')) {
-    data = {
-      ...data,
-      email: data.email || `${data.name?.toLowerCase().replace(/\s+/g, '') || 'student'}@drishta.edu`,
-      risk: data.risk ? {
-        ...data.risk,
-        level: (data.risk.level || 'low').toLowerCase()
-      } : { level: 'low', score: 0, reasons: [] },
-      subjects: (data.subjects || []).map((s: any) => ({
-        ...s,
-        score: s.latest ?? s.score ?? 0
-      })),
-      activity: data.activity || {
-        days_since_active: data.days_since_active || 0,
-        days_since_commit: data.days_since_commit || 0,
-        days_since_linkedin: data.days_since_linkedin || 0,
-      },
-      goals_met_streak: data.goals_met_streak || 0,
-    };
-  } else if (requestPath.endsWith('/plan') || requestPath.endsWith('/plan/generate')) {
-    const targetId = requestPath.split('/')[2] || data.student_id || 'STU_HERO';
-    const missions = data.daily_targets ? data.daily_targets.map((t: any) => ({
-      id: t.id,
-      task: t.task,
-      kind: t.kind || 'recovery',
-      why: t.why || 'Customized study task',
-      why_source: 'decide',
-      completed: t.done || false,
-    })) : (data.missions || []);
-    const schedule = (data.schedule || []).map((s: any) => s.slot ? ({
-      time: s.slot,
-      title: s.task,
-      location: 'Virtual',
-    }) : s);
-    const firstIntervention = data.interventions && data.interventions[0] ? {
-      id: data.interventions[0].id,
-      student_id: targetId,
-      action: data.interventions[0].action,
-      why: data.interventions[0].why,
-      kind: data.interventions[0].kind,
-      auto: data.interventions[0].auto,
-      approved: data.interventions[0].reviewed || false,
-    } : undefined;
-
-    const mappedInterventions = (data.interventions || []).map((inter: any) => ({
-      id: inter.id,
-      student_id: targetId,
-      action: inter.action,
-      why: inter.why,
-      kind: inter.kind,
-      auto: inter.auto,
-      approved: inter.reviewed || false,
-    }));
-
-    data = {
-      ...data,
-      missions,
-      schedule,
-      intervention_triggered: Boolean(data.intervention_triggered),
-      intervention: data.intervention || firstIntervention,
-      interventions: mappedInterventions,
-    };
-  } else if (requestPath.endsWith('/predictions')) {
-    data = {
-      projected_gpa: data.projected_gpa || 3.4,
-      exam_trend: data.exam_trend || 'stable',
-      exam_forecast: (data.exam_forecast || []).map((f: any) => ({
-        subject: f.subject,
-        score: Math.round(f.projected_score || f.score || 0),
-      })),
-      computed_at: data.computed_at || new Date().toISOString(),
-    };
-  } else if (requestPath.endsWith('/internships')) {
-    data = (data || []).map((item: any) => ({
-      title: item.title,
-      company: item.company,
-      match: item.match || 0,
-      have_skills: item.have || [],
-      missing_skills: item.missing || [],
-      why: item.why || '',
-    }));
-  } else if (requestPath.endsWith('/students') || requestPath === '/students') {
-    data = (data || []).map((s: any) => ({
-      student_id: s.student_id,
-      name: s.name,
-      risk: {
-        level: (s.risk?.level || 'low').toLowerCase(),
-        score: s.risk?.score || 0,
-        reasons: s.risk?.reasons || [],
-      },
-    }));
-  } else if (requestPath.endsWith('/reviews')) {
-    data = (data || []).map((item: any) => ({
-      topic: item.topic,
-      subject: item.subject || 'General',
-      why: item.why || '',
-      reps: item.reps || 1,
-      interval: item.interval || 1,
-      ease_factor: item.ease_factor || 2.5,
-      due_date: item.due_date || item.next_review || new Date().toISOString(),
-    }));
-  } else if (/\/reviews\/[^/]+\/grade$/.test(requestPath)) {
-    // POST .../grade returns a bare backend TopicMemory ({topic, learned_on, ef,
-    // reps, interval, next_review}) - map field names and add the subject the
-    // schema requires but the backend doesn't track per-review.
-    data = {
-      ...data,
-      subject: data.subject || 'General',
-      why: data.why || '',
-      ease_factor: data.ef ?? data.ease_factor ?? 2.5,
-      due_date: data.next_review || data.due_date || new Date().toISOString(),
-    };
-  } else if (/\/interventions\/[^/]+\/review$/.test(requestPath)) {
-    // POST .../review returns {intervention_id, status, reviewed_by, at} - derive
-    // the InterventionSchema fields the backend doesn't echo back. auto is always
-    // false here since the backend rejects reviewing auto interventions.
-    const parts = String(data.intervention_id || '').split(':');
-    data = {
-      ...data,
-      id: data.intervention_id,
-      student_id: parts[0] || '',
-      student_name: '',
-      action: parts.slice(1).join(':') || '',
-      why: '',
-      kind: 'academic',
-      auto: false,
-      approved: true,
-    };
-  }
-
-  if (schema) {
-    const parseResult = schema.safeParse(data);
-    if (!parseResult.success) {
-      const errorMsg = `Zod validation failure at ${path}: ${parseResult.error.message}`;
-      console.error(errorMsg, parseResult.error.format());
-      throw new Error(errorMsg);
-    }
-    return parseResult.data as T;
-  }
-
-  return data as T;
-}
-
-export const apiClient = {
-  get: <T>(path: string, schema?: z.ZodType<T, any, any>, options?: RequestInit) =>
-    request<T>(path, { method: 'GET', schema, ...options }),
-
-  post: <T>(path: string, body?: any, schema?: z.ZodType<T, any, any>, options?: RequestInit) =>
-    request<T>(path, {
-      method: 'POST',
-      body: body instanceof FormData ? body : JSON.stringify(body),
-      schema,
+    const response = await fetch(url, {
       ...options,
-    }),
-};
+      headers,
+    });
+
+    if (!response.ok) {
+      let errorData: unknown;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = await response.text();
+      }
+      throw new ApiError(
+        typeof errorData === 'object' && errorData && 'detail' in errorData
+          ? String((errorData as { detail: unknown }).detail)
+          : response.statusText,
+        response.status,
+        errorData
+      );
+    }
+
+    const data = await response.json();
+
+    if (schema) {
+      const parsed = schema.safeParse(data);
+      if (!parsed.success) {
+        console.warn(`[Schema Mismatch] ${endpoint}:`, parsed.error);
+      }
+      return parsed.success ? (parsed.data as T) : (data as T);
+    }
+
+    return data as T;
+  }
+
+  public async get<T>(endpoint: string, schema?: z.ZodType<any>): Promise<T> {
+    return this.request<T>(endpoint, { method: 'GET' }, schema);
+  }
+
+  public async post<T>(
+    endpoint: string,
+    body?: unknown,
+    schema?: z.ZodType<any>
+  ): Promise<T> {
+    const isFormData = body instanceof FormData;
+    return this.request<T>(
+      endpoint,
+      {
+        method: 'POST',
+        body: isFormData ? body : JSON.stringify(body ?? {}),
+      },
+      schema
+    );
+  }
+}
+
+export const apiClient = new ApiClient();
 export default apiClient;

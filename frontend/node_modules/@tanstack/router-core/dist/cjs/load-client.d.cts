@@ -1,0 +1,121 @@
+import { GLOBAL_SEROVAL, GLOBAL_TSR } from './ssr/constants.cjs';
+import { TsrSsrGlobal } from './ssr/types.cjs';
+import { ParsedLocation } from './location.cjs';
+import { NavigateOptions } from './link.cjs';
+import { AnyRouteMatch } from './Matches.cjs';
+import { NotFoundError } from './not-found.cjs';
+import { AnyRoute } from './route.cjs';
+import { AnyRedirect } from './redirect.cjs';
+import { AnyRouter, RouterCore, TrailingSlashOption } from './router.cjs';
+import { RoutePaths } from './routeInfo.cjs';
+import { RouterHistory } from '@tanstack/history';
+export declare function replaceRouteChunk(route: AnyRoute, lazyFn: AnyRoute['lazyFn']): void;
+export declare function loadRouteChunk(route: AnyRoute, componentType?: 'errorComponent' | 'notFoundComponent' | false, onPendingReady?: () => void): Promise<void> | undefined;
+/** Return the structural lane through the first terminal render boundary. */
+export declare function _getRenderedMatches(matches: Array<AnyRouteMatch>): Array<AnyRouteMatch>;
+/** Return the lane whose document assets belong to the current presentation. */
+export declare function _getAssetMatches(matches: Array<AnyRouteMatch>): Array<AnyRouteMatch>;
+declare const lanePhase: unique symbol;
+type LanePhase = 'matched' | 'contextualized' | 'reduced' | 'projected';
+/**
+ * Lane matches carry their lane's phase so functions can demand evidence of
+ * pipeline position (e.g. `commitMatches` only accepts a projected lane's
+ * matches). The brand is phantom — it never exists at runtime.
+ */
+type LaneMatches<TPhase extends LanePhase> = Array<WorkMatch> & {
+    readonly [lanePhase]?: TPhase;
+};
+type Lane<TPhase extends LanePhase> = [
+    location: ParsedLocation,
+    matches: LaneMatches<TPhase>,
+    background?: Array<BackgroundLoaderTask>,
+    backgroundSettlement?: Promise<IndexedOutcome | undefined>
+] & {
+    readonly [lanePhase]?: TPhase;
+};
+type ReducedLane = Lane<'reduced'>;
+type ProjectedLane = Lane<'projected'>;
+declare const SUCCESS = 0;
+declare const ERROR = 1;
+declare const NOT_FOUND = 2;
+declare const REDIRECTED = 3;
+declare const CANCELED = 4;
+type RedirectOutcome = [
+    kind: typeof REDIRECTED,
+    redirect: AnyRedirect,
+    location?: ParsedLocation
+];
+type NonRedirectOutcome = [kind: typeof SUCCESS, data: unknown] | [kind: typeof ERROR, error: unknown] | [kind: typeof NOT_FOUND, error: NotFoundError] | [kind: typeof CANCELED];
+type RawLoaderOutcome = NonRedirectOutcome | [kind: typeof REDIRECTED, redirect: AnyRedirect];
+type LoaderOutcome = NonRedirectOutcome | RedirectOutcome;
+type IndexedOutcome = [index: number, outcome: LoaderOutcome, boundary?: number];
+export type LoaderFlight = [
+    outcome: Promise<RawLoaderOutcome>,
+    controller: AbortController,
+    leases: number
+];
+type WorkMatch = AnyRouteMatch & {
+    _flight?: LoaderFlight;
+};
+declare const matchPhase: unique symbol;
+/**
+ * A match whose loader outcome has been applied by `settleInto`, which is the
+ * sole granter of this brand (phantom, zero-runtime). Consumers that require
+ * it — e.g. `cacheLoaderMatch` — can only be reached after settlement, so the
+ * compiler enforces the loader→settle→cache ordering. Sources that arrive
+ * already settled (dehydrated server data) must cast at a named boundary.
+ */
+type SettledMatch = WorkMatch & {
+    readonly [matchPhase]: 'settled';
+};
+export type LoadTransaction = [
+    controller: AbortController,
+    redirects: number,
+    location: ParsedLocation,
+    matches: Array<AnyRouteMatch>,
+    startedAt: number,
+    done: Promise<void>,
+    /**
+     * Dev-only HMR refresh mode. Presence forces successor rematerialization
+     * until this publication is acknowledged. The optional hydration handoff is
+     * retired when the refresh publishes.
+     */
+    refresh?: [handoff: NonNullable<AnyRouter['_handoff']> | undefined]
+];
+export type PendingSession = [
+    generation: LoadTransaction,
+    boundaryId: string,
+    /** Pending reveal time until acknowledged, then minimum-visible-until time. */
+    deadline: number,
+    revealTimer?: ReturnType<typeof setTimeout>,
+    ack?: Promise<boolean> | true,
+    component?: unknown
+];
+type CoordinatorRouter = AnyRouter & {
+    /** Active speculative lanes retained for cancellation, invalidation, and cache clearing. */
+    _preloads?: Map<AbortController, Array<AnyRouteMatch>>;
+    _refreshNextLoad?: boolean;
+};
+type BackgroundLoaderTask = [
+    index: number,
+    outcome: Promise<LoaderOutcome>,
+    chunkFailure: Promise<IndexedOutcome | undefined>,
+    candidate: WorkMatch
+];
+export declare function waitFor<T>(value: T | PromiseLike<T>, signal: AbortSignal): Promise<T>;
+export declare function getRoute(router: AnyRouter, match: WorkMatch): AnyRoute;
+export declare function cacheLoaderMatch(router: CoordinatorRouter, match: SettledMatch, planned: AnyRouteMatch | undefined): void;
+export declare function projectLane(router: AnyRouter, lane: ReducedLane, signal: AbortSignal, start?: number, end?: number): Promise<ProjectedLane>;
+export declare function loadClientRoute(router: CoordinatorRouter, opts?: {
+    sync?: boolean;
+}): Promise<void>;
+export declare function refreshClientRoute(router: CoordinatorRouter): Promise<void>;
+export declare function preloadClientRoute<TRouteTree extends AnyRoute, TTrailingSlashOption extends TrailingSlashOption, TDefaultStructuralSharingOption extends boolean, TRouterHistory extends RouterHistory, TDehydrated extends Record<string, any> = Record<string, any>, TFrom extends RoutePaths<TRouteTree> | string = string, TTo extends string | undefined = undefined, TMaskFrom extends RoutePaths<TRouteTree> | string = TFrom, TMaskTo extends string = ''>(router: RouterCore<TRouteTree, TTrailingSlashOption, TDefaultStructuralSharingOption, TRouterHistory, TDehydrated>, opts: NavigateOptions<RouterCore<TRouteTree, TTrailingSlashOption, TDefaultStructuralSharingOption, TRouterHistory, TDehydrated>, TFrom, TTo, TMaskFrom, TMaskTo>): Promise<Array<AnyRouteMatch> | undefined>;
+declare global {
+    interface Window {
+        [GLOBAL_TSR]?: TsrSsrGlobal;
+        [GLOBAL_SEROVAL]?: any;
+    }
+}
+export declare function hydrate(router: AnyRouter): Promise<void>;
+export {};
