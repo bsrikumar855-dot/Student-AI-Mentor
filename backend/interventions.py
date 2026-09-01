@@ -11,6 +11,15 @@ from backend.internships import match_internships
 from backend.platform_links import PlatformLinkStore, resolve_active_handles
 from backend import policy as policy_module
 
+
+def _slugify(text: str) -> str:
+    """Lowercase, whitespace-collapsed, underscore-joined id fragment (e.g.
+    'Database Systems' -> 'database_systems') so multi-word subject/topic
+    names stay URL-path-safe and match the id shape used elsewhere in the
+    project (see mocks/plan.json)."""
+    return "_".join(text.strip().lower().split())
+
+
 def evaluate_interventions(
     student: StudentState,
     risk_state: RiskResult,
@@ -51,10 +60,13 @@ def evaluate_interventions(
             ))
 
     # 3. weak_topic: any subject trend[-1] < trend[-2]
+    # NOTE: id includes the subject so multiple weak subjects for one student
+    # don't collide -- POST /interventions/{id}/review looks up by exact id,
+    # and a shared id would make only the first weak subject reviewable.
     for s in student.subjects:
         if len(s.trend) >= 2 and s.trend[-1] < s.trend[-2]:
             interventions.append(Intervention(
-                id=f"{sid}:weak_topic",
+                id=f"{sid}:weak_topic:{_slugify(s.name)}",
                 action="weak_topic",
                 why=f"Recent downward grade trend in '{s.name}' ({s.trend[-2]} -> {s.latest}).",
                 kind="academic",
@@ -62,10 +74,11 @@ def evaluate_interventions(
             ))
 
     # 4. revision_mission: for each retain.due_topics(state)
+    # NOTE: id includes the topic for the same reason as weak_topic above.
     due = due_topics(student)
     for topic_due in due:
         interventions.append(Intervention(
-            id=f"{sid}:revision_mission",
+            id=f"{sid}:revision_mission:{_slugify(topic_due['topic'])}",
             action="revision_mission",
             why=topic_due["why"],
             kind="academic",

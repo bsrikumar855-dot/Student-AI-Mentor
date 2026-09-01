@@ -41,10 +41,15 @@ export const LoginPage: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       const resData = await apiClient.post<any>('/auth/login', data);
 
       localStorage.setItem('drishta_auth_token', resData.token);
-      localStorage.setItem('drishta_student_id', resData.student_id);
-      
-      // Determine if logging in as faculty or student
-      const role = data.email.includes('faculty') || data.email.includes('admin') ? 'faculty' : 'student';
+      if (resData.student_id) {
+        localStorage.setItem('drishta_student_id', resData.student_id);
+      } else {
+        localStorage.removeItem('drishta_student_id');
+      }
+
+      // Backend role is one of student/mentor/faculty/admin; the app shell only
+      // distinguishes the student view from the faculty/mentor/admin console.
+      const role: 'student' | 'faculty' = resData.role === 'student' ? 'student' : 'faculty';
       localStorage.setItem('drishta_role', role);
 
       toast('Authentication Successful', `Logged in as ${resData.name || data.email}`, 'guard');

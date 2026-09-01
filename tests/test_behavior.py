@@ -1096,4 +1096,119 @@ def test_student_ownership_verification():
     assert res_mentor.status_code == 200
 
 
+def test_complete_task_with_explicit_body_is_idempotent():
+    """POST .../complete with {"completed": true/false} sets the exact state
+    instead of toggling, so retries/double-submits are safe."""
+    from fastapi.testclient import TestClient
+    from backend.main import app, store, generate_plan_for_student
+    from backend.models import StudentState
+
+    student = StudentState(
+        student_id="STU_IDEMPOTENT",
+        name="Idempotent Student",
+        cgpa=7.0,
+        attendance=0.8,
+        subjects=[],
+        exams=[],
+        days_since_active=1,
+        days_since_commit=1,
+        days_since_linkedin=1,
+        goals_met_streak=0,
+        topics=[],
+        skills=[]
+    )
+    store.save_student(student)
+    plan = generate_plan_for_student(student)
+    store.save_plan("STU_IDEMPOTENT", plan)
+
+    client = TestClient(app)
+    headers = {
+        "X-API-Key": "drishta_secret_key",
+        "X-User-Role": "student",
+        "X-User-Id": "STU_IDEMPOTENT",
+    }
+    task_id = plan.daily_targets[0].id
+
+    # Setting completed=true twice in a row must land on done=True both times,
+    # not toggle back to False on the second call.
+    for _ in range(2):
+        res = client.post(
+            f"/api/v1/students/STU_IDEMPOTENT/tasks/{task_id}/complete",
+            json={"completed": True},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        assert res.json()["done"] is True
+
+    res = client.post(
+        f"/api/v1/students/STU_IDEMPOTENT/tasks/{task_id}/complete",
+        json={"completed": False},
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert res.json()["done"] is False
+
+    # Omitting the body still falls back to toggling (backward compatible).
+    res = client.post(
+        f"/api/v1/students/STU_IDEMPOTENT/tasks/{task_id}/complete",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert res.json()["done"] is True
+
+
+def test_weak_topic_and_revision_mission_ids_are_unique_per_subject_and_topic():
+    """Two weak subjects (or two due topics) must not produce colliding
+    intervention ids, or POST /interventions/{id}/review can only ever act on
+    the first one."""
+    from datetime import datetime, timedelta
+    from backend.models import Subject, Exam, StudentState, RiskResult, RiskComponents, TopicMemory
+
+    student = StudentState(
+        student_id="STU_DUP_ID",
+        name="Dup Id Student",
+        cgpa=7.0,
+        attendance=0.8,
+        subjects=[
+            Subject(name="Physics", latest=60.0, trend=[80.0, 60.0], flag=None),
+            Subject(name="Chemistry", latest=55.0, trend=[75.0, 55.0], flag=None),
+        ],
+        exams=[],
+        nearest_exam=None,
+        days_since_active=0,
+        days_since_commit=0,
+        days_since_linkedin=0,
+        goals_met_streak=0,
+        topics=[
+            TopicMemory(topic="Sorting", learned_on=datetime.now() - timedelta(days=30), ef=1.3, reps=0, interval=1, next_review=datetime.now() - timedelta(days=1)),
+            TopicMemory(topic="Graphs", learned_on=datetime.now() - timedelta(days=30), ef=1.3, reps=0, interval=1, next_review=datetime.now() - timedelta(days=1)),
+        ],
+        skills=[],
+        risk=None,
+        predictions=None
+    )
+    risk_state = RiskResult(
+        score=10, level="Low", reasons=[],
+        components=RiskComponents(score_gap=0.0, syllabus_behind=0.0, activity_recency=0.0, trend=0.0, coding_activity=0.0),
+        computed_at="2026-07-22T10:00:00Z"
+    )
+
+    interventions = evaluate_interventions(student, risk_state, [])
+    ids = [i.id for i in interventions]
+
+    weak_topic_ids = [i for i in ids if ":weak_topic:" in i]
+    revision_mission_ids = [i for i in ids if ":revision_mission:" in i]
+
+    assert len(weak_topic_ids) == 2
+    assert len(set(weak_topic_ids)) == 2  # no collision
+    assert "STU_DUP_ID:weak_topic:physics" in weak_topic_ids
+    assert "STU_DUP_ID:weak_topic:chemistry" in weak_topic_ids
+
+    assert len(revision_mission_ids) == 2
+    assert len(set(revision_mission_ids)) == 2  # no collision
+
+    # ids must overall be unique (no cross-type collisions either)
+    assert len(ids) == len(set(ids))
+
+
 
