@@ -1,0 +1,110 @@
+﻿name: Jules Daily Development
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 9:00 PM IST = 15:30 UTC
+    - cron: "30 15 * * *"
+
+jobs:
+  jules:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Run Jules
+        uses: google-labs-code/jules-action@v1.0.0
+        with:
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
+
+          starting_branch: main
+
+          include_last_commit: true
+          include_commit_log: true
+
+          prompt: |
+            Work on the Student-AI-Mentor repository.
+
+            You are an autonomous daily software engineering agent.
+
+            IMPORTANT:
+            - Work as Suchit Sachin Chopade.
+            - GitHub username: suchitchopade3110-arch
+            - Never push directly to main.
+            - Create a branch and a pull request.
+            - Never merge the PR.
+
+            TASK:
+
+            1. Inspect the repository and understand the existing architecture.
+            2. Inspect recent commits and existing open PRs.
+            3. Identify ONE meaningful improvement.
+            4. Prioritize:
+               - bugs
+               - security
+               - reliability
+               - test coverage
+               - performance
+               - API correctness
+               - maintainability
+               - UX
+               - documentation
+
+            5. Do NOT make meaningless changes.
+            6. Do NOT rewrite working code.
+            7. Do NOT introduce unnecessary dependencies.
+            8. Do NOT modify secrets or .env files.
+            9. Do NOT disable CI checks.
+            10. Keep the change small and reviewable.
+
+            TESTING:
+
+            Run:
+
+            python -m pytest
+
+            Also run any relevant existing lint/build/type-check commands.
+
+            Fix failures caused by your changes.
+
+            GIT:
+
+            Commit author:
+
+            Name: Suchit Sachin Chopade
+            Email: suchitchopade3110@gmail.com
+
+            Use a meaningful commit message following:
+
+            feat:
+            fix:
+            refactor:
+            perf:
+            test:
+            docs:
+            chore:
+
+            PR:
+
+            Open a pull request against main.
+
+            PR title:
+
+            chore(jules): <short description>
+
+            PR description must contain:
+
+            ## What changed
+
+            ## Why
+
+            ## Verification
+
+            ## Risk
+
+            If there is no meaningful improvement available, do not create
+            a meaningless commit or pull request.
