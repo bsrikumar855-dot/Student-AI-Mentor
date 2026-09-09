@@ -23,8 +23,8 @@ jobs:
 
           starting_branch: main
 
-          include_last_commit: true
-          include_commit_log: true
+          include_last_commit: false
+          include_commit_log: false
 
           prompt: |
             Work on the Student-AI-Mentor repository.
